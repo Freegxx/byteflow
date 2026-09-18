@@ -38,7 +38,15 @@ download_py() {
 }
 
 find_py() {
-  find "$1" -type f -name 'python3*' -path '*/bin/*' | head -1
+  # Prefer real interpreter, never *-config
+  local cand
+  for cand in "$1"/python/bin/python3 "$1"/python/bin/python3.12 "$1"/bin/python3; do
+    if [[ -x "$cand" && ! "$cand" =~ config$ ]]; then
+      echo "$cand"
+      return 0
+    fi
+  done
+  find "$1" -type f -path '*/bin/python3*' ! -name '*-config' | head -1
 }
 
 install_deps() {
@@ -116,7 +124,11 @@ case "$ARCH" in
   x86_64) PY_ROOT="$ROOT/Frameworks/python-x86_64" ;;
   *) osascript -e "display alert \"不支持的架构: $ARCH\""; exit 1 ;;
 esac
-PY="$(find "$PY_ROOT" -type f -name 'python3*' -path '*/bin/*' | head -1)"
+PY=""
+for cand in "$PY_ROOT"/python/bin/python3 "$PY_ROOT"/python/bin/python3.12; do
+  [[ -x "$cand" ]] && PY="$cand" && break
+done
+[[ -n "$PY" ]] || PY="$(find "$PY_ROOT" -type f -path '*/bin/python3*' ! -name '*-config' | head -1)"
 [[ -x "${PY:-}" ]] || { osascript -e 'display alert "缺少对应架构的内置 Python"'; exit 1; }
 
 DATA="$HOME/Library/Application Support/ByteFlow"
