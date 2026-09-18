@@ -51,16 +51,53 @@
 
 ## 快速开始
 
-### 方式一: DMG 安装包（最简单，推荐普通用户）
+### 方式一: 便携式 DMG（推荐生产分发，开箱即用）
+
+**🎯 特点：完全自包含，无需系统 Python 或联网**
 
 **下载并安装**:
-1. 下载 `ByteFlow-v2.0.dmg` （构建方法见下方）
+1. 下载对应架构的 DMG:
+   - Apple Silicon (M1/M2/M3): `ByteFlow-v2.0-arm64.dmg`
+   - Intel Mac: `ByteFlow-v2.0-x86_64.dmg`
+2. 双击打开 DMG 文件
+3. 将 `ByteFlow.app` 拖到 `Applications` 文件夹
+4. 右键点击 ByteFlow.app → 打开（绕过 Gatekeeper）
+5. 浏览器自动打开 `http://127.0.0.1:8787`
+
+**内含组件**:
+- ✅ Python 3.11.9 运行时（内嵌）
+- ✅ 所有依赖已预装
+- ✅ 开箱即用，无需联网
+- ✅ 无需目标机器安装 Python
+
+**构建便携式 DMG**（需要 macOS + 联网，一次性）:
+```bash
+git clone https://github.com/Freegxx/byteflow.git
+cd byteflow
+./build_portable_dmg.sh
+
+# 输出（根据当前 Mac 架构）:
+# ByteFlow-v2.0-arm64.dmg (Apple Silicon Mac 上)
+# ByteFlow-v2.0-x86_64.dmg (Intel Mac 上)
+```
+
+**构建时间**: 首次 ~5-10 分钟（下载 Python + 依赖），后续 ~2-3 分钟  
+**DMG 大小**: ~150-200MB  
+**详细说明**: 见 `PORTABLE_DMG_GUIDE.md`
+
+---
+
+### 方式二: 标准 DMG（需要系统 Python，适合开发测试）
+
+**下载并安装**:
+1. 下载 `ByteFlow-v2.0.dmg`
 2. 双击打开 DMG 文件
 3. 将 `ByteFlow.app` 拖到 `Applications` 文件夹
 4. 双击运行 `ByteFlow.app`
 
 **首次运行**:
-- 应用会自动安装依赖并配置
+- 应用会检测系统 Python 3.8+
+- 自动创建 venv 并安装依赖（需联网）
 - 可选择是否开机自动启动
 - 浏览器自动打开 Web 界面
 
@@ -70,17 +107,19 @@
 或：系统偏好设置 → 安全性与隐私 → 通用 → "仍要打开"
 ```
 
-**构建 DMG** （需要 macOS）:
+**构建标准 DMG**（需要 macOS）:
 ```bash
 git clone https://github.com/Freegxx/byteflow.git
 cd byteflow
 ./build_dmg.sh
-# 输出: ByteFlow-v2.0.dmg
+# 输出: ByteFlow-v2.0.dmg (~2-5MB)
 ```
 
 详细说明见 `DMG_BUILD_GUIDE.md`。
 
-### 方式二: Install.command 脚本（推荐开发者）
+---
+
+### 方式三: Install.command 脚本（推荐开发者）
 
 ```bash
 # 1. 克隆仓库
@@ -100,7 +139,7 @@ chmod +x Install.command
 - ✅ 自动安装依赖
 - ✅ 配置 LaunchAgent（可选开机启动）
 
-### 方式三: 手动运行
+### 方式四: 手动运行
 
 ```bash
 # 1. 克隆仓库

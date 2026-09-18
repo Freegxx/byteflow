@@ -8,9 +8,50 @@
 
 ## 快速安装
 
-### 方式 A: DMG 安装包（推荐普通用户）
+### 方式 A: 便携式 DMG（推荐生产分发，无需系统 Python）
 
-1. **构建 DMG**（需要在 macOS 上）:
+1. **构建便携式 DMG**（需要在 macOS 上 + 联网一次）:
+   ```bash
+   git clone https://github.com/Freegxx/byteflow.git
+   cd byteflow
+   git checkout cursor/byteflow-macos-network-monitor-9efb
+   ./build_portable_dmg.sh
+   
+   # 输出（根据当前 Mac 架构）:
+   # ByteFlow-v2.0-arm64.dmg (Apple Silicon)
+   # ByteFlow-v2.0-x86_64.dmg (Intel)
+   ```
+
+2. **安装**（可在无 Python 的 Mac 上离线安装）:
+   - 双击 `ByteFlow-v2.0-arm64.dmg` 或 `ByteFlow-v2.0-x86_64.dmg`
+   - 将 `ByteFlow.app` 拖到 `Applications` 文件夹
+   - 右键点击 `ByteFlow.app` → 打开（绕过 Gatekeeper）
+
+3. **首次运行**:
+   - 应用显示欢迎对话框
+   - 自动配置数据目录（`~/Library/Application Support/ByteFlow`）
+   - 询问是否开机启动
+   - 询问是否启动菜单栏应用
+   - 浏览器自动打开 Web 界面
+
+4. **特点**:
+   - ✅ 内嵌 Python 3.11.9 运行时
+   - ✅ 所有依赖已预装（fastapi, uvicorn, rumps, etc.）
+   - ✅ 无需系统 Python 或 pip
+   - ✅ 无需联网安装依赖
+   - ✅ DMG 大小 ~150-200MB
+
+5. **Gatekeeper 处理**（未签名应用）:
+   - 右键点击 `ByteFlow.app` → 打开 → 确认打开
+   - 或：系统偏好设置 → 安全性与隐私 → 通用 → "仍要打开"
+
+详细文档: `PORTABLE_DMG_GUIDE.md`
+
+---
+
+### 方式 B: 标准 DMG（需要系统 Python 3.8+）
+
+1. **构建标准 DMG**（需要在 macOS 上）:
    ```bash
    git clone https://github.com/Freegxx/byteflow.git
    cd byteflow
@@ -25,7 +66,7 @@
 
 3. **首次运行**:
    - 应用会显示欢迎对话框
-   - 自动安装依赖（进度通知）
+   - 自动安装依赖（需联网，进度通知）
    - 询问是否开机启动
    - 询问是否启动菜单栏应用
    - 浏览器自动打开 Web 界面
@@ -34,7 +75,9 @@
    - 右键点击 `ByteFlow.app` → 打开 → 确认打开
    - 或：系统偏好设置 → 安全性与隐私 → 通用 → "仍要打开"
 
-### 方式 B: Install.command 脚本（推荐开发者）
+---
+
+### 方式 C: Install.command 脚本（推荐开发者）
 
 ```bash
 # 1. 克隆或下载代码
