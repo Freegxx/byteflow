@@ -1,0 +1,319 @@
+#!/usr/bin/env python3
+"""
+ByteFlow Network Collector - 网络流量采集器
+使用 nettop 采集 macOS 每个进程的网络流量数据
+"""
+
+import subprocess
+import time
+import sqlite3
+import sys
+import platform
+import re
+from datetime import datetime, timedelta
+from typing import Dict, Tuple
+import signal
+import os
+
+DB_PATH = "byteflow.db"
+SAMPLE_INTERVAL = 1  # 采样间隔（秒）
+
+
+class NetworkCollector:
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self.running = True
+        self.previous_data = {}
+        self.init_database()
+        
+        # 注册信号处理
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+    
+    def _signal_handler(self, signum, frame):
+        """处理退出信号"""
+        print("\n正在停止采集器...")
+        self.running = False
+    
+    def init_database(self):
+        """初始化数据库表结构"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # 原始数据表（秒级精度，保留24小时）
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS traffic_raw (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                app_name TEXT NOT NULL,
+                bundle_id TEXT,
+                timestamp INTEGER NOT NULL,
+                bytes_in INTEGER NOT NULL,
+                bytes_out INTEGER NOT NULL,
+                rate_in REAL NOT NULL,
+                rate_out REAL NOT NULL
+            )
+        """)
+        
+        # 分钟聚合表（保留7天）
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS traffic_minute (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                app_name TEXT NOT NULL,
+                bundle_id TEXT,
+                timestamp INTEGER NOT NULL,
+                bytes_in INTEGER NOT NULL,
+                bytes_out INTEGER NOT NULL,
+                UNIQUE(app_name, timestamp)
+            )
+        """)
+        
+        # 小时聚合表（保留30天）
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS traffic_hour (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                app_name TEXT NOT NULL,
+                bundle_id TEXT,
+                timestamp INTEGER NOT NULL,
+                bytes_in INTEGER NOT NULL,
+                bytes_out INTEGER NOT NULL,
+                UNIQUE(app_name, timestamp)
+            )
+        """)
+        
+        # 创建索引以提高查询性能
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_raw_timestamp ON traffic_raw(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_raw_app ON traffic_raw(app_name)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_minute_timestamp ON traffic_minute(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_minute_app ON traffic_minute(app_name)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hour_timestamp ON traffic_hour(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hour_app ON traffic_hour(app_name)")
+        
+        conn.commit()
+        conn.close()
+        print(f"数据库初始化完成: {self.db_path}")
+    
+    def parse_nettop_output(self, output: str) -> Dict[str, Tuple[int, int]]:
+        """
+        解析 nettop 输出，提取每个进程的字节数
+        返回: {app_name: (bytes_in, bytes_out)}
+        """
+        traffic_data = {}
+        lines = output.strip().split('\n')
+        
+        for line in lines:
+            # nettop 输出格式：进程名 ... bytes_in bytes_out
+            # 使用正则表达式匹配
+            parts = line.split()
+            if len(parts) < 3:
+                continue
+            
+            # 进程名通常是第一列
+            app_name = parts[0]
+            
+            # 尝试提取字节数（通常在最后几列）
+            try:
+                # nettop -J bytes_in,bytes_out 格式
+                # 寻找数字模式
+                numbers = []
+                for part in parts[1:]:
+                    # 移除逗号和单位，提取纯数字
+                    cleaned = re.sub(r'[^\d]', '', part)
+                    if cleaned:
+                        numbers.append(int(cleaned))
+                
+                if len(numbers) >= 2:
+                    bytes_in = numbers[-2]
+                    bytes_out = numbers[-1]
+                    
+                    # 聚合同名应用
+                    if app_name in traffic_data:
+                        prev_in, prev_out = traffic_data[app_name]
+                        traffic_data[app_name] = (prev_in + bytes_in, prev_out + bytes_out)
+                    else:
+                        traffic_data[app_name] = (bytes_in, bytes_out)
+            except (ValueError, IndexError):
+                continue
+        
+        return traffic_data
+    
+    def collect_nettop_data(self) -> Dict[str, Tuple[int, int]]:
+        """
+        执行 nettop 命令并解析结果
+        返回: {app_name: (bytes_in, bytes_out)}
+        """
+        try:
+            # nettop -P -L 1 -J bytes_in,bytes_out
+            # -P: 按进程分组
+            # -L 1: 采样1次
+            # -J: 指定列
+            result = subprocess.run(
+                ['nettop', '-P', '-L', '1', '-J', 'bytes_in,bytes_out', '-x'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode != 0:
+                print(f"nettop 执行失败: {result.stderr}")
+                return {}
+            
+            return self.parse_nettop_output(result.stdout)
+        
+        except subprocess.TimeoutExpired:
+            print("nettop 执行超时")
+            return {}
+        except FileNotFoundError:
+            print("错误: 找不到 nettop 命令。请确保在 macOS 系统上运行。")
+            sys.exit(1)
+        except Exception as e:
+            print(f"采集数据时出错: {e}")
+            return {}
+    
+    def save_traffic_data(self, traffic_data: Dict[str, Tuple[int, int]], timestamp: int):
+        """保存流量数据到数据库"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        for app_name, (bytes_in, bytes_out) in traffic_data.items():
+            # 计算速率（相对于上一次采样）
+            rate_in = 0.0
+            rate_out = 0.0
+            
+            if app_name in self.previous_data:
+                prev_in, prev_out = self.previous_data[app_name]
+                rate_in = max(0, bytes_in - prev_in) / SAMPLE_INTERVAL
+                rate_out = max(0, bytes_out - prev_out) / SAMPLE_INTERVAL
+            
+            # 保存到原始数据表
+            cursor.execute("""
+                INSERT INTO traffic_raw (app_name, bundle_id, timestamp, bytes_in, bytes_out, rate_in, rate_out)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (app_name, None, timestamp, bytes_in, bytes_out, rate_in, rate_out))
+        
+        conn.commit()
+        conn.close()
+        
+        # 更新上次数据
+        self.previous_data = traffic_data
+    
+    def rollup_data(self):
+        """数据汇总：将秒级数据聚合到分钟和小时"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        now = int(time.time())
+        
+        # 聚合到分钟（每分钟执行一次）
+        minute_ago = now - 120  # 处理过去2分钟的数据
+        minute_timestamp = (now // 60) * 60
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO traffic_minute (app_name, bundle_id, timestamp, bytes_in, bytes_out)
+            SELECT 
+                app_name,
+                bundle_id,
+                ? as timestamp,
+                SUM(bytes_in) as bytes_in,
+                SUM(bytes_out) as bytes_out
+            FROM traffic_raw
+            WHERE timestamp >= ? AND timestamp < ?
+            GROUP BY app_name
+        """, (minute_timestamp - 60, minute_timestamp - 60, minute_timestamp))
+        
+        # 聚合到小时（每小时执行一次）
+        hour_timestamp = (now // 3600) * 3600
+        hour_ago = hour_timestamp - 3600
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO traffic_hour (app_name, bundle_id, timestamp, bytes_in, bytes_out)
+            SELECT 
+                app_name,
+                bundle_id,
+                ? as timestamp,
+                SUM(bytes_in) as bytes_in,
+                SUM(bytes_out) as bytes_out
+            FROM traffic_minute
+            WHERE timestamp >= ? AND timestamp < ?
+            GROUP BY app_name
+        """, (hour_ago, hour_ago, hour_timestamp))
+        
+        conn.commit()
+        conn.close()
+    
+    def cleanup_old_data(self):
+        """清理过期数据"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        now = int(time.time())
+        
+        # 删除24小时前的原始数据
+        cursor.execute("DELETE FROM traffic_raw WHERE timestamp < ?", (now - 24 * 3600,))
+        
+        # 删除7天前的分钟数据
+        cursor.execute("DELETE FROM traffic_minute WHERE timestamp < ?", (now - 7 * 24 * 3600,))
+        
+        # 删除30天前的小时数据
+        cursor.execute("DELETE FROM traffic_hour WHERE timestamp < ?", (now - 30 * 24 * 3600,))
+        
+        conn.commit()
+        conn.close()
+    
+    def run(self):
+        """主采集循环"""
+        print("ByteFlow 采集器已启动...")
+        print(f"采样间隔: {SAMPLE_INTERVAL} 秒")
+        print(f"数据库位置: {os.path.abspath(self.db_path)}")
+        print("按 Ctrl+C 停止采集\n")
+        
+        iteration = 0
+        
+        while self.running:
+            try:
+                # 采集数据
+                timestamp = int(time.time())
+                traffic_data = self.collect_nettop_data()
+                
+                if traffic_data:
+                    self.save_traffic_data(traffic_data, timestamp)
+                    print(f"[{datetime.fromtimestamp(timestamp).strftime('%H:%M:%S')}] "
+                          f"采集了 {len(traffic_data)} 个应用的流量数据")
+                
+                # 每60秒执行一次汇总
+                iteration += 1
+                if iteration % 60 == 0:
+                    print("执行数据汇总...")
+                    self.rollup_data()
+                
+                # 每10分钟清理一次旧数据
+                if iteration % 600 == 0:
+                    print("清理过期数据...")
+                    self.cleanup_old_data()
+                
+                # 等待下一次采样
+                time.sleep(SAMPLE_INTERVAL)
+            
+            except Exception as e:
+                print(f"采集循环出错: {e}")
+                time.sleep(SAMPLE_INTERVAL)
+        
+        print("采集器已停止")
+
+
+def check_macos():
+    """检查是否在 macOS 上运行"""
+    if platform.system() != "Darwin":
+        print("错误: ByteFlow 只能在 macOS 系统上运行")
+        print(f"当前系统: {platform.system()}")
+        sys.exit(1)
+
+
+def main():
+    check_macos()
+    
+    collector = NetworkCollector(DB_PATH)
+    collector.run()
+
+
+if __name__ == "__main__":
+    main()
