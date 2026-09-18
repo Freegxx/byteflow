@@ -225,11 +225,22 @@ if [[ -d "$PROJECT_DIR" ]]; then
   cp -f "$OUT_DMG" "$PROJECT_DIR/ByteFlow-universal.dmg"
   echo "  → $PROJECT_DIR/ByteFlow-universal.dmg"
 fi
-# 也放一份到套件目录旁
-cp -f "$OUT_DMG" "$ROOT/ByteFlow-universal.dmg" 2>/dev/null || true
+# 也放一份到套件目录旁，以及仓库根目录（CI / 本地一致）
+cp -f "$OUT_DMG" "$ROOT/ByteFlow-universal.dmg"
+REPO_ROOT="$(cd "$ROOT/.." && pwd)"
+if [[ "$(basename "$ROOT")" == "packaging" ]]; then
+  cp -f "$OUT_DMG" "$REPO_ROOT/ByteFlow-universal.dmg"
+  echo "  → $REPO_ROOT/ByteFlow-universal.dmg"
+fi
+# GitHub Actions Desktop 兜底
+if [[ -n "${GITHUB_WORKSPACE:-}" && -f "$HOME/Desktop/ByteFlow-universal.dmg" ]]; then
+  cp -f "$HOME/Desktop/ByteFlow-universal.dmg" "$GITHUB_WORKSPACE/ByteFlow-universal.dmg"
+fi
 
 echo ""
 echo "✓ Universal DMG: $OUT_DMG"
+ls -lh "$OUT_DMG" 2>/dev/null || true
+[[ -f "$REPO_ROOT/ByteFlow-universal.dmg" ]] && ls -lh "$REPO_ROOT/ByteFlow-universal.dmg" || true
 echo "上传到 GitHub Release 示例："
 echo "  gh release create v1.2.0 \"$OUT_DMG\" --repo Freegxx/byteflow --title \"ByteFlow v1.2.0\" --notes \"Universal DMG (arm64+x86_64)\""
 open -R "$OUT_DMG" 2>/dev/null || true
