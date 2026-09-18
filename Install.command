@@ -5,6 +5,7 @@
 set -e
 
 INSTALL_DIR="$HOME/Applications/ByteFlow"
+VENV_DIR="$INSTALL_DIR/venv"
 LAUNCH_AGENT_DIR="$HOME/Library/LaunchAgents"
 LAUNCH_AGENT_PLIST="com.byteflow.agent.plist"
 
@@ -27,7 +28,8 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-echo "✓ Python 3 已安装"
+PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
+echo "✓ Python $PYTHON_VERSION 已安装"
 
 # 创建安装目录
 echo ""
@@ -38,16 +40,37 @@ mkdir -p "$INSTALL_DIR"
 echo "复制应用文件..."
 cp -r "$(dirname "$0")"/* "$INSTALL_DIR/" 2>/dev/null || true
 
-# 安装Python依赖
+# 创建虚拟环境
 echo ""
-echo "安装 Python 依赖..."
+echo "创建 Python 虚拟环境..."
 cd "$INSTALL_DIR"
-python3 -m pip install --user -r requirements.txt -q
+python3 -m venv "$VENV_DIR"
 
-# 安装菜单栏应用依赖
-python3 -m pip install --user rumps -q
+# 激活虚拟环境
+source "$VENV_DIR/bin/activate"
 
-echo "✓ 依赖安装完成"
+# 安装核心依赖
+echo ""
+echo "安装核心依赖..."
+"$VENV_DIR/bin/pip" install --upgrade pip -q
+"$VENV_DIR/bin/pip" install -r requirements.txt -q
+
+echo "✓ 核心依赖安装完成"
+
+# 安装菜单栏应用依赖（可选，允许失败）
+echo ""
+echo "尝试安装菜单栏应用依赖（可选）..."
+if "$VENV_DIR/bin/pip" install -r requirements-menubar.txt -q 2>/dev/null; then
+    echo "✓ 菜单栏应用依赖安装成功"
+    MENUBAR_AVAILABLE=true
+else
+    echo "⚠ 菜单栏应用依赖安装失败（可选功能，不影响主程序）"
+    echo "  如需菜单栏功能，请手动安装: pip install -r requirements-menubar.txt"
+    MENUBAR_AVAILABLE=false
+fi
+
+# 停用虚拟环境
+deactivate
 
 # 询问是否设置开机启动
 echo ""
@@ -78,6 +101,11 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     <string>$INSTALL_DIR/logs/stdout.log</string>
     <key>StandardErrorPath</key>
     <string>$INSTALL_DIR/logs/stderr.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>$VENV_DIR/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
 </dict>
 </plist>
 EOF
