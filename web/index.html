@@ -669,6 +669,8 @@
         let currentApp = null;
         let currentRange = '24h';
         let chart = null;
+        let chartApp = null; // 当前图表显示的应用
+        let chartRange = null; // 当前图表显示的时间范围
         let allAppsData = []; // 存储所有应用数据用于搜索过滤
         let autoRefreshTimer = null; // 自动刷新定时器
         let isRefreshing = false; // 防止重叠请求
@@ -835,6 +837,8 @@
                 chart = null;
             }
             currentApp = null;
+            chartApp = null;
+            chartRange = null;
         }
 
         // 加载汇总数据（3个时间段的总流量）
@@ -897,79 +901,96 @@
                 const downloadData = data.data.map(point => point.bytes_in / 1024 / 1024); // 转换为 MB
                 const uploadData = data.data.map(point => point.bytes_out / 1024 / 1024);
                 
-                if (chart) {
-                    chart.destroy();
-                }
+                // 判断是否需要重建图表（切换应用或时间范围，或首次创建）
+                const needsRecreate = !chart || chartApp !== appName || chartRange !== range;
                 
-                const ctx = document.getElementById('traffic-chart').getContext('2d');
-                chart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: '下载 (MB)',
-                                data: downloadData,
-                                borderColor: '#007aff',
-                                backgroundColor: 'rgba(0, 122, 255, 0.1)',
-                                tension: 0.3,
-                                fill: true
-                            },
-                            {
-                                label: '上传 (MB)',
-                                data: uploadData,
-                                borderColor: '#34c759',
-                                backgroundColor: 'rgba(52, 199, 89, 0.1)',
-                                tension: 0.3,
-                                fill: true
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        interaction: {
-                            mode: 'index',
-                            intersect: false
-                        },
-                        plugins: {
-                            legend: {
-                                display: true,
-                                position: 'top',
-                                labels: {
-                                    font: {
-                                        size: 14
-                                    }
-                                }
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + ' MB';
-                                    }
-                                }
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                title: {
-                                    display: true,
-                                    text: '流量 (MB)'
-                                }
-                            },
-                            x: {
-                                title: {
-                                    display: true,
-                                    text: '时间'
+                if (needsRecreate) {
+                    // 销毁旧图表
+                    if (chart) {
+                        chart.destroy();
+                    }
+                    
+                    // 创建新图表
+                    const ctx = document.getElementById('traffic-chart').getContext('2d');
+                    chart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: '下载 (MB)',
+                                    data: downloadData,
+                                    borderColor: '#007aff',
+                                    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+                                    tension: 0.3,
+                                    fill: true
                                 },
-                                ticks: {
-                                    maxTicksLimit: 12
+                                {
+                                    label: '上传 (MB)',
+                                    data: uploadData,
+                                    borderColor: '#34c759',
+                                    backgroundColor: 'rgba(52, 199, 89, 0.1)',
+                                    tension: 0.3,
+                                    fill: true
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            plugins: {
+                                legend: {
+                                    display: true,
+                                    position: 'top',
+                                    labels: {
+                                        font: {
+                                            size: 14
+                                        }
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + ' MB';
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    title: {
+                                        display: true,
+                                        text: '流量 (MB)'
+                                    }
+                                },
+                                x: {
+                                    title: {
+                                        display: true,
+                                        text: '时间'
+                                    },
+                                    ticks: {
+                                        maxTicksLimit: 12
+                                    }
                                 }
                             }
                         }
-                    }
-                });
+                    });
+                    
+                    // 记录当前图表状态
+                    chartApp = appName;
+                    chartRange = range;
+                } else {
+                    // 增量更新：相同应用和时间范围，仅更新数据
+                    chart.data.labels = labels;
+                    chart.data.datasets[0].data = downloadData;
+                    chart.data.datasets[1].data = uploadData;
+                    chart.update('none'); // 'none' 禁用动画，更快
+                }
                 
             } catch (error) {
                 console.error('加载图表数据失败:', error);
