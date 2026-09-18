@@ -36,6 +36,37 @@ class NetworkCollector:
         print("\n正在停止采集器...")
         self.running = False
     
+    @staticmethod
+    def normalize_app_name(app_name: str) -> str:
+        """
+        标准化应用名称，合并辅助进程到主应用
+        
+        规则：
+        1. 如果包含 ' Helper'（区分大小写），取之前的部分
+        2. 清理尾部的不完整截断标记（如 ' (' 或 ' ('）
+        3. 去除首尾空格
+        
+        示例：
+        - 'Cursor Helper' → 'Cursor'
+        - 'Cursor Helper (GPU)' → 'Cursor'
+        - 'Chrome Helper (Renderer)' → 'Chrome'
+        - '企业微信' → '企业微信' (保持不变)
+        """
+        normalized = app_name
+        
+        # 1. 如果包含 ' Helper'，截取之前的部分
+        if ' Helper' in normalized:
+            normalized = normalized.split(' Helper')[0]
+        
+        # 2. 清理尾部的不完整括号
+        normalized = normalized.rstrip(' (')
+        normalized = normalized.rstrip(' （')  # 中文括号
+        
+        # 3. 去除首尾空格
+        normalized = normalized.strip()
+        
+        return normalized if normalized else app_name  # 防止返回空字符串
+    
     def init_database(self):
         """初始化数据库表结构"""
         conn = sqlite3.connect(self.db_path)
@@ -170,6 +201,9 @@ class NetworkCollector:
                 # 去除 .PID 后缀（如 "mDNSResponder.193" -> "mDNSResponder"）
                 app_name = re.sub(r'\.\d+$', '', process_name)
                 
+                # 标准化应用名称（合并 Helper 进程）
+                app_name = self.normalize_app_name(app_name)
+                
                 # 最后两个数字字段是 bytes_in 和 bytes_out
                 bytes_in = int(parts[1].strip())
                 bytes_out = int(parts[2].strip())
@@ -212,7 +246,9 @@ class NetworkCollector:
                     # 进程行：Name.pid,bytes_in,bytes_out,
                     process_name = parts[0].strip()
                     if process_name:
-                        current_app = re.sub(r'\.\d+$', '', process_name)
+                        # 去除 .PID 后缀并标准化应用名
+                        app_name = re.sub(r'\.\d+$', '', process_name)
+                        current_app = self.normalize_app_name(app_name)
                 else:
                     # 连接行：tcp4 local<->remote,bytes_in,bytes_out,
                     if not current_app:
