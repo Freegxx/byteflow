@@ -226,15 +226,28 @@ if [[ -d "$PROJECT_DIR" ]]; then
   echo "  → $PROJECT_DIR/ByteFlow-universal.dmg"
 fi
 # 也放一份到套件目录旁，以及仓库根目录（CI / 本地一致）
-cp -f "$OUT_DMG" "$ROOT/ByteFlow-universal.dmg"
+# macOS cp 对「同一文件」会返回非 0，需跳过
+copy_if_needed() {
+  local src="$1" dst="$2"
+  [[ -f "$src" ]] || return 0
+  local src_r dst_r
+  src_r="$(cd "$(dirname "$src")" && pwd)/$(basename "$src")"
+  mkdir -p "$(dirname "$dst")"
+  dst_r="$(cd "$(dirname "$dst")" && pwd)/$(basename "$dst")"
+  if [[ "$src_r" == "$dst_r" ]]; then
+    echo "  (already at $dst_r)"
+    return 0
+  fi
+  cp -f "$src" "$dst"
+  echo "  → $dst"
+}
+copy_if_needed "$OUT_DMG" "$ROOT/ByteFlow-universal.dmg"
 REPO_ROOT="$(cd "$ROOT/.." && pwd)"
 if [[ "$(basename "$ROOT")" == "packaging" ]]; then
-  cp -f "$OUT_DMG" "$REPO_ROOT/ByteFlow-universal.dmg"
-  echo "  → $REPO_ROOT/ByteFlow-universal.dmg"
+  copy_if_needed "$OUT_DMG" "$REPO_ROOT/ByteFlow-universal.dmg"
 fi
-# GitHub Actions Desktop 兜底
 if [[ -n "${GITHUB_WORKSPACE:-}" && -f "$HOME/Desktop/ByteFlow-universal.dmg" ]]; then
-  cp -f "$HOME/Desktop/ByteFlow-universal.dmg" "$GITHUB_WORKSPACE/ByteFlow-universal.dmg"
+  copy_if_needed "$HOME/Desktop/ByteFlow-universal.dmg" "$GITHUB_WORKSPACE/ByteFlow-universal.dmg"
 fi
 
 echo ""
