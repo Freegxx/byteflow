@@ -9,8 +9,8 @@ APP="$WORK/ByteFlow.app"
 OUT_DMG="${1:-$HOME/Desktop/ByteFlow-universal.dmg}"
 # 同时写入项目目录（若存在）
 PROJECT_DIR="/Users/guxx/Developer/Personal/byteflow"
-PY_VERSION="3.12.6"
-PBS_TAG="20240713"
+PY_VERSION="3.12.14"
+PBS_TAG="20260901"
 
 echo "======================================"
 echo " ByteFlow Universal DMG (arm64+x86_64)"
@@ -30,7 +30,7 @@ download_py() {
     x86_64) pbs_arch="x86_64" ;;
   esac
   name="cpython-${PY_VERSION}+${PBS_TAG}-${pbs_arch}-apple-darwin-install_only.tar.gz"
-  url="https://github.com/indygreg/python-build-standalone/releases/download/${PBS_TAG}/${name}"
+  url="https://github.com/astral-sh/python-build-standalone/releases/download/${PBS_TAG}/${name}"
   echo "下载 Python ${PY_VERSION} (${arch})..."
   [[ -f "$WORK/cache/$name" ]] || curl -L --fail --progress-bar -o "$WORK/cache/$name" "$url"
   mkdir -p "$dest"
