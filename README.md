@@ -51,7 +51,36 @@
 
 ## 快速开始
 
-### 方式一: 一键安装（推荐 macOS）
+### 方式一: DMG 安装包（最简单，推荐普通用户）
+
+**下载并安装**:
+1. 下载 `ByteFlow-v2.0.dmg` （构建方法见下方）
+2. 双击打开 DMG 文件
+3. 将 `ByteFlow.app` 拖到 `Applications` 文件夹
+4. 双击运行 `ByteFlow.app`
+
+**首次运行**:
+- 应用会自动安装依赖并配置
+- 可选择是否开机自动启动
+- 浏览器自动打开 Web 界面
+
+**Gatekeeper 提示**（未签名应用）:
+```
+右键点击 ByteFlow.app → 打开 → 确认打开
+或：系统偏好设置 → 安全性与隐私 → 通用 → "仍要打开"
+```
+
+**构建 DMG** （需要 macOS）:
+```bash
+git clone https://github.com/Freegxx/byteflow.git
+cd byteflow
+./build_dmg.sh
+# 输出: ByteFlow-v2.0.dmg
+```
+
+详细说明见 `DMG_BUILD_GUIDE.md`。
+
+### 方式二: Install.command 脚本（推荐开发者）
 
 ```bash
 # 1. 克隆仓库
@@ -67,11 +96,11 @@ chmod +x Install.command
 
 安装器会：
 - ✅ 将 ByteFlow 安装到 `~/Applications/ByteFlow`
-- ✅ 自动安装 Python 依赖
+- ✅ 创建 Python 虚拟环境
+- ✅ 自动安装依赖
 - ✅ 配置 LaunchAgent（可选开机启动）
-- ✅ 创建桌面快捷方式
 
-### 方式二: 手动运行
+### 方式三: 手动运行
 
 ```bash
 # 1. 克隆仓库
@@ -182,13 +211,24 @@ ByteFlow 会自动合并辅助进程到主应用，避免重复显示：
 
 ```
 ByteFlow
-├── collector.py      # 网络流量采集器（Python）
-├── api.py           # Web API 服务器（FastAPI）
+├── ByteFlow.app/           # macOS 应用包（双击安装）
+│   └── Contents/
+│       ├── MacOS/
+│       │   └── ByteFlow    # 启动器（处理安装/启动）
+│       ├── Resources/      # 应用代码（下方文件）
+│       └── Info.plist      # 应用信息
+├── collector.py            # 网络流量采集器（Python）
+├── api.py                  # Web API 服务器（FastAPI）
+├── menubar.py              # 菜单栏应用（可选）
+├── config.py               # 配置管理
+├── utils.py                # 工具函数
 ├── web/
-│   └── index.html   # 前端界面（Chart.js）
-├── byteflow.db      # SQLite 数据库（自动创建）
-├── start.sh         # 启动脚本
-└── stop.sh          # 停止脚本
+│   └── index.html          # 前端界面（Chart.js）
+├── byteflow.db             # SQLite 数据库（自动创建）
+├── build_dmg.sh            # DMG 构建脚本
+├── Install.command         # 备选安装器
+├── start.sh                # 启动脚本
+└── stop.sh                 # 停止脚本
 ```
 
 ### 数据采集原理

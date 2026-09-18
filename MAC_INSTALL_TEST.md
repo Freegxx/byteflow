@@ -6,7 +6,35 @@
 - Python 3.8+
 - 终端权限（完全磁盘访问）
 
-## 快速安装（推荐）
+## 快速安装
+
+### 方式 A: DMG 安装包（推荐普通用户）
+
+1. **构建 DMG**（需要在 macOS 上）:
+   ```bash
+   git clone https://github.com/Freegxx/byteflow.git
+   cd byteflow
+   git checkout cursor/byteflow-macos-network-monitor-9efb
+   ./build_dmg.sh
+   ```
+
+2. **安装**:
+   - 双击 `ByteFlow-v2.0.dmg`
+   - 将 `ByteFlow.app` 拖到 `Applications` 文件夹
+   - 双击 `ByteFlow.app` 运行
+
+3. **首次运行**:
+   - 应用会显示欢迎对话框
+   - 自动安装依赖（进度通知）
+   - 询问是否开机启动
+   - 询问是否启动菜单栏应用
+   - 浏览器自动打开 Web 界面
+
+4. **Gatekeeper 处理**（未签名应用）:
+   - 右键点击 `ByteFlow.app` → 打开 → 确认打开
+   - 或：系统偏好设置 → 安全性与隐私 → 通用 → "仍要打开"
+
+### 方式 B: Install.command 脚本（推荐开发者）
 
 ```bash
 # 1. 克隆或下载代码
