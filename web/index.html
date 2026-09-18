@@ -233,6 +233,76 @@
             background: #2fb350;
         }
 
+        .search-controls {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 15px;
+            border: 2px solid #e8e8ed;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-box input:focus {
+            border-color: #667eea;
+        }
+
+        .app-picker-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .app-picker-container label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1d1d1f;
+            white-space: nowrap;
+        }
+
+        .app-picker-container select {
+            padding: 10px 16px;
+            font-size: 14px;
+            border: 2px solid #e8e8ed;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            outline: none;
+            min-width: 200px;
+            transition: border-color 0.3s ease;
+        }
+
+        .app-picker-container select:focus {
+            border-color: #667eea;
+        }
+
+        .precision-note {
+            margin-top: 12px;
+            padding: 12px;
+            background: #f5f5f7;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #86868b;
+            line-height: 1.6;
+        }
+
+        .precision-note strong {
+            color: #1d1d1f;
+        }
+
         @media (max-width: 768px) {
             .controls {
                 flex-direction: column;
@@ -288,6 +358,20 @@
 
         <div class="overview-section" id="overview-section">
             <h2 class="section-title">应用流量概览</h2>
+            
+            <!-- 搜索和快速选择器 -->
+            <div class="search-controls">
+                <div class="search-box">
+                    <input type="text" id="search-input" placeholder="🔍 搜索应用名称..." />
+                </div>
+                <div class="app-picker-container">
+                    <label for="app-picker">快速跳转：</label>
+                    <select id="app-picker">
+                        <option value="">-- 选择应用查看详情 --</option>
+                    </select>
+                </div>
+            </div>
+            
             <div id="loading" class="loading">正在加载数据...</div>
             <table id="traffic-table" style="display: none;">
                 <thead>
@@ -315,6 +399,11 @@
                     <button class="btn" data-range="30d" onclick="changeRange('30d')">30天</button>
                 </div>
             </div>
+            <div class="precision-note" id="precision-note">
+                <strong>24小时</strong>：秒级精度数据，适合查看短期波动 | 
+                <strong>7天</strong>：分钟级精度数据，适合分析每日模式 | 
+                <strong>30天</strong>：小时级精度数据，适合查看长期趋势
+            </div>
             <div class="chart-container">
                 <canvas id="traffic-chart"></canvas>
             </div>
@@ -326,6 +415,7 @@
         let currentApp = null;
         let currentRange = '24h';
         let chart = null;
+        let allAppsData = []; // 存储所有应用数据用于搜索过滤
 
         // 格式化字节数
         function formatBytes(bytes) {
@@ -345,11 +435,21 @@
         function formatTimestamp(timestamp, range) {
             const date = new Date(timestamp * 1000);
             if (range === '24h') {
+                // 24小时：HH:mm 或 HH:mm:ss
                 return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
             } else if (range === '7d') {
-                return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                // 7天：MM-DD HH:mm
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hour = String(date.getHours()).padStart(2, '0');
+                const minute = String(date.getMinutes()).padStart(2, '0');
+                return `${month}-${day} ${hour}:${minute}`;
             } else {
-                return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+                // 30天：MM-DD HH:00
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hour = String(date.getHours()).padStart(2, '0');
+                return `${month}-${day} ${hour}:00`;
             }
         }
 
@@ -360,6 +460,56 @@
             setTimeout(() => {
                 errorDiv.innerHTML = '';
             }, 5000);
+        }
+
+        // 渲染应用表格（支持过滤）
+        function renderAppsTable(apps) {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+            
+            apps.forEach(app => {
+                const row = document.createElement('tr');
+                row.setAttribute('data-app-name', app.app_name.toLowerCase());
+                row.innerHTML = `
+                    <td><span class="app-name" onclick="showChart('${app.app_name.replace(/'/g, "\\'")}')">${app.app_name}</span></td>
+                    <td class="traffic-value download">${formatRate(app.rate_in)}</td>
+                    <td class="traffic-value upload">${formatRate(app.rate_out)}</td>
+                    <td class="traffic-value download">${formatBytes(app.total_in)}</td>
+                    <td class="traffic-value upload">${formatBytes(app.total_out)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 更新应用选择器
+        function updateAppPicker(apps) {
+            const picker = document.getElementById('app-picker');
+            picker.innerHTML = '<option value="">-- 选择应用查看详情 --</option>';
+            
+            apps.forEach(app => {
+                const option = document.createElement('option');
+                option.value = app.app_name;
+                option.textContent = app.app_name;
+                picker.appendChild(option);
+            });
+        }
+
+        // 搜索过滤
+        function filterApps() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            
+            if (!searchTerm) {
+                // 显示所有应用
+                renderAppsTable(allAppsData);
+                return;
+            }
+            
+            // 过滤应用（支持中文和英文模糊搜索）
+            const filtered = allAppsData.filter(app => 
+                app.app_name.toLowerCase().includes(searchTerm)
+            );
+            
+            renderAppsTable(filtered);
         }
 
         // 加载概览数据
@@ -375,25 +525,19 @@
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('traffic-table').style.display = 'table';
                 
-                const tbody = document.getElementById('table-body');
-                tbody.innerHTML = '';
+                // 保存所有应用数据
+                allAppsData = data.apps;
                 
+                // 渲染表格和选择器
+                renderAppsTable(allAppsData);
+                updateAppPicker(allAppsData);
+                
+                // 计算总流量
                 let totalIn = 0;
                 let totalOut = 0;
-                
                 data.apps.forEach(app => {
                     totalIn += app.total_in;
                     totalOut += app.total_out;
-                    
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td><span class="app-name" onclick="showChart('${app.app_name}')">${app.app_name}</span></td>
-                        <td class="traffic-value download">${formatRate(app.rate_in)}</td>
-                        <td class="traffic-value upload">${formatRate(app.rate_out)}</td>
-                        <td class="traffic-value download">${formatBytes(app.total_in)}</td>
-                        <td class="traffic-value upload">${formatBytes(app.total_out)}</td>
-                    `;
-                    tbody.appendChild(row);
                 });
                 
                 // 更新统计卡片
@@ -548,6 +692,21 @@
                 e.target.classList.add('active');
                 loadOverview(e.target.dataset.period);
             });
+        });
+
+        // 搜索框事件
+        document.getElementById('search-input').addEventListener('input', filterApps);
+        
+        // 应用选择器事件
+        document.getElementById('app-picker').addEventListener('change', (e) => {
+            const selectedApp = e.target.value;
+            if (selectedApp) {
+                showChart(selectedApp);
+                // 重置选择器
+                setTimeout(() => {
+                    e.target.value = '';
+                }, 100);
+            }
         });
 
         // 初始加载
