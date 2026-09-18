@@ -53,11 +53,53 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
         }
 
         .period-selector {
             display: flex;
             gap: 10px;
+        }
+
+        .refresh-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .refresh-interval-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .refresh-interval-control label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1d1d1f;
+        }
+
+        .refresh-interval-control select {
+            padding: 8px 12px;
+            border: 2px solid #e8e8ed;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #1d1d1f;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .refresh-interval-control select:hover {
+            border-color: #667eea;
+        }
+
+        .refresh-interval-control select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
         .btn {
@@ -518,7 +560,21 @@
                 <button class="btn" data-period="7d">最近7天</button>
                 <button class="btn" data-period="30d">最近30天</button>
             </div>
-            <button class="btn refresh-btn" onclick="refreshData()">刷新数据</button>
+            <div class="refresh-controls">
+                <div class="refresh-interval-control">
+                    <label for="refresh-interval">定时刷新</label>
+                    <select id="refresh-interval" onchange="updateRefreshInterval()">
+                        <option value="0">关闭</option>
+                        <option value="1000">1秒</option>
+                        <option value="3000">3秒</option>
+                        <option value="5000">5秒</option>
+                        <option value="30000">30秒</option>
+                        <option value="60000">1分钟</option>
+                        <option value="1800000">30分钟</option>
+                    </select>
+                </div>
+                <button class="btn refresh-btn" onclick="refreshData()">刷新数据</button>
+            </div>
         </div>
 
         <div class="overview-section" id="overview-section">
@@ -630,6 +686,8 @@
         let currentRange = '24h';
         let chart = null;
         let allAppsData = []; // 存储所有应用数据用于搜索过滤
+        let autoRefreshTimer = null; // 自动刷新定时器
+        let isRefreshing = false; // 防止重叠请求
 
         // 格式化字节数
         function formatBytes(bytes) {
@@ -728,6 +786,9 @@
 
         // 加载概览数据
         async function loadOverview(period = '24h') {
+            if (isRefreshing) return; // 防止重叠请求
+            
+            isRefreshing = true;
             currentPeriod = period;
             
             try {
@@ -762,6 +823,8 @@
             } catch (error) {
                 console.error('加载概览数据失败:', error);
                 showError('加载数据失败，请确保采集器正在运行');
+            } finally {
+                isRefreshing = false;
             }
         }
 
@@ -1038,13 +1101,76 @@
         // 初始加载
         loadOverview('24h');
         
-        // 自动刷新（每30秒）
-        setInterval(() => {
-            // 仅在模态框关闭时刷新概览
-            if (!document.getElementById('app-modal').classList.contains('active')) {
+        // 自动刷新管理
+        function updateRefreshInterval() {
+            const select = document.getElementById('refresh-interval');
+            const interval = parseInt(select.value);
+            
+            // 清除现有定时器
+            if (autoRefreshTimer) {
+                clearInterval(autoRefreshTimer);
+                autoRefreshTimer = null;
+            }
+            
+            // 保存到 localStorage
+            localStorage.setItem('byteflow-refresh-interval', interval.toString());
+            
+            // 如果选择了定时刷新（非关闭）
+            if (interval > 0) {
+                autoRefreshTimer = setInterval(() => {
+                    if (!isRefreshing) {
+                        performAutoRefresh();
+                    }
+                }, interval);
+            }
+        }
+        
+        // 执行自动刷新
+        function performAutoRefresh() {
+            const modal = document.getElementById('app-modal');
+            const isModalOpen = modal.classList.contains('active');
+            
+            if (isModalOpen && currentApp) {
+                // 模态框打开：刷新模态框内容（图表、使用量卡片、IP列表）
+                refreshModalContent();
+            } else {
+                // 模态框关闭：刷新概览列表
                 loadOverview(currentPeriod);
             }
-        }, 30000);
+        }
+        
+        // 刷新模态框内容
+        async function refreshModalContent() {
+            if (!currentApp || isRefreshing) return;
+            
+            isRefreshing = true;
+            try {
+                // 刷新三个使用量卡片
+                await loadSummaryData(currentApp);
+                // 刷新当前图表和 IP 列表
+                await loadChartData(currentApp, currentRange);
+            } finally {
+                isRefreshing = false;
+            }
+        }
+        
+        // 初始化时加载保存的刷新间隔
+        function initRefreshInterval() {
+            const savedInterval = localStorage.getItem('byteflow-refresh-interval');
+            const select = document.getElementById('refresh-interval');
+            
+            if (savedInterval !== null) {
+                select.value = savedInterval;
+            } else {
+                select.value = '0'; // 默认关闭
+            }
+            
+            // 启动定时器
+            updateRefreshInterval();
+        }
+        
+        // 页面加载时初始化
+        window.addEventListener('DOMContentLoaded', initRefreshInterval);
     </script>
 </body>
 </html>
