@@ -132,6 +132,8 @@ fastapi==0.115.0
 uvicorn==0.30.6
 python-multipart==0.0.12
 aiosqlite==0.20.0
+pywebview==5.3
+requests==2.32.3
 EOF
 
 "$BUNDLED_PYTHON" -m pip install -r "$BUILD_DIR/requirements_bundle.txt" -q
@@ -370,33 +372,19 @@ echo $API_PID > "$PIDS_DIR/api.pid"
 # 等待服务启动
 sleep 2
 
-# 非后台模式：打开浏览器
+# 非后台模式：启动桌面应用
 if [ "$BACKGROUND_MODE" = false ]; then
-    osascript -e 'display notification "ByteFlow 已启动\n访问地址: http://127.0.0.1:8787" with title "ByteFlow"'
-    open "http://127.0.0.1:8787"
-fi
-
-# 尝试启动菜单栏应用（可选）
-if [ "$BACKGROUND_MODE" = false ]; then
-    # 检查 rumps 是否可用
-    "$BUNDLED_PYTHON" -c "import rumps" 2>/dev/null
+    osascript -e 'display notification "正在启动 ByteFlow 桌面应用..." with title "ByteFlow"'
+    
+    # 检查 pywebview 是否可用
+    "$BUNDLED_PYTHON" -c "import webview" 2>/dev/null
     if [ $? -eq 0 ]; then
-        osascript <<EOF
-set menubarResponse to button returned of (display dialog "是否启动菜单栏应用？
-
-菜单栏应用可以显示实时流量速率。" buttons {"否", "是"} default button "是" giving up after 10 with title "ByteFlow")
-
-if menubarResponse is "是" then
-    return "yes"
-else
-    return "no"
-end if
-EOF
-        
-        if [ $? -eq 0 ]; then
-            "$BUNDLED_PYTHON" menubar.py > "$LOGS_DIR/menubar.log" 2>&1 &
-            echo $! > "$PIDS_DIR/menubar.pid"
-        fi
+        # 启动桌面窗口（前台）
+        "$BUNDLED_PYTHON" desktop.py
+    else
+        # 降级：使用浏览器
+        osascript -e 'display notification "pywebview 不可用，使用浏览器" with title "ByteFlow"'
+        open "http://127.0.0.1:8787"
     fi
 fi
 

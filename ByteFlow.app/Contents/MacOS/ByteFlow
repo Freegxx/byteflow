@@ -168,11 +168,28 @@ export PYTHONUNBUFFERED=1
 # 创建日志目录
 mkdir -p logs
 
+# 非后台模式：启动桌面应用（前台）
+if [ "$BACKGROUND_MODE" = false ]; then
+    osascript -e 'display notification "正在启动 ByteFlow 桌面应用..." with title "ByteFlow"'
+    
+    # 检查 pywebview 是否可用
+    python3 -c "import webview" 2>/dev/null
+    if [ $? -eq 0 ]; then
+        # 使用桌面窗口（desktop.py 会自动启动和管理服务）
+        python3 desktop.py
+        exit 0
+    else
+        # 降级：pywebview 不可用，启动服务并使用浏览器
+        osascript -e 'display notification "pywebview 不可用，使用浏览器模式" with title "ByteFlow"'
+    fi
+fi
+
+# 后台模式或降级模式：手动启动服务
 # 检查是否已经在运行
 if [ -f .pids/collector.pid ]; then
     COLLECTOR_PID=$(cat .pids/collector.pid)
     if ps -p $COLLECTOR_PID > /dev/null 2>&1; then
-        # 已在运行，只打开浏览器
+        # 已在运行，只打开浏览器（降级模式）
         if [ "$BACKGROUND_MODE" = false ]; then
             sleep 1
             open "http://127.0.0.1:8787"
@@ -196,34 +213,10 @@ echo $API_PID > .pids/api.pid
 # 等待服务启动
 sleep 2
 
-# 非后台模式：打开浏览器
+# 降级模式：打开浏览器
 if [ "$BACKGROUND_MODE" = false ]; then
     osascript -e 'display notification "ByteFlow 已启动\n访问地址: http://127.0.0.1:8787" with title "ByteFlow"'
     open "http://127.0.0.1:8787"
-fi
-
-# 检查菜单栏应用是否可用且非后台模式
-if [ "$BACKGROUND_MODE" = false ] && [ -f "$RESOURCES_PATH/.menubar_status" ]; then
-    source "$RESOURCES_PATH/.menubar_status"
-    if [ "$MENUBAR_AVAILABLE" = "true" ]; then
-        # 询问是否启动菜单栏应用
-        osascript <<EOF
-set menubarResponse to button returned of (display dialog "是否启动菜单栏应用？
-
-菜单栏应用可以显示实时流量速率。" buttons {"否", "是"} default button "是" giving up after 10 with title "ByteFlow")
-
-if menubarResponse is "是" then
-    return "yes"
-else
-    return "no"
-end if
-EOF
-        
-        if [ $? -eq 0 ]; then
-            python3 menubar.py > logs/menubar.log 2>&1 &
-            echo $! > .pids/menubar.pid
-        fi
-    fi
 fi
 
 exit 0
