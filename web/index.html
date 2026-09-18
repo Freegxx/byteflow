@@ -65,13 +65,14 @@
         .refresh-controls {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 15px;
+            flex-wrap: wrap;
         }
 
         .refresh-interval-control {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
         }
 
         .refresh-interval-control label {
@@ -80,26 +81,9 @@
             color: #1d1d1f;
         }
 
-        .refresh-interval-control select {
-            padding: 8px 12px;
-            border: 2px solid #e8e8ed;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 500;
-            color: #1d1d1f;
-            background: white;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .refresh-interval-control select:hover {
-            border-color: #667eea;
-        }
-
-        .refresh-interval-control select:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        .refresh-interval-selector {
+            display: flex;
+            gap: 8px;
         }
 
         .btn {
@@ -562,16 +546,16 @@
             </div>
             <div class="refresh-controls">
                 <div class="refresh-interval-control">
-                    <label for="refresh-interval">定时刷新</label>
-                    <select id="refresh-interval" onchange="updateRefreshInterval()">
-                        <option value="0">关闭</option>
-                        <option value="1000">1秒</option>
-                        <option value="3000">3秒</option>
-                        <option value="5000">5秒</option>
-                        <option value="30000">30秒</option>
-                        <option value="60000">1分钟</option>
-                        <option value="1800000">30分钟</option>
-                    </select>
+                    <label>定时刷新</label>
+                    <div class="refresh-interval-selector">
+                        <button class="btn active" data-refresh="0">关闭</button>
+                        <button class="btn" data-refresh="1000">1秒</button>
+                        <button class="btn" data-refresh="3000">3秒</button>
+                        <button class="btn" data-refresh="5000">5秒</button>
+                        <button class="btn" data-refresh="30000">30秒</button>
+                        <button class="btn" data-refresh="60000">1分钟</button>
+                        <button class="btn" data-refresh="1800000">30分钟</button>
+                    </div>
                 </div>
                 <button class="btn refresh-btn" onclick="refreshData()">刷新数据</button>
             </div>
@@ -1102,10 +1086,7 @@
         loadOverview('24h');
         
         // 自动刷新管理
-        function updateRefreshInterval() {
-            const select = document.getElementById('refresh-interval');
-            const interval = parseInt(select.value);
-            
+        function updateRefreshInterval(interval) {
             // 清除现有定时器
             if (autoRefreshTimer) {
                 clearInterval(autoRefreshTimer);
@@ -1114,6 +1095,14 @@
             
             // 保存到 localStorage
             localStorage.setItem('byteflow-refresh-interval', interval.toString());
+            
+            // 更新按钮状态
+            document.querySelectorAll('[data-refresh]').forEach(btn => {
+                btn.classList.remove('active');
+                if (parseInt(btn.dataset.refresh) === interval) {
+                    btn.classList.add('active');
+                }
+            });
             
             // 如果选择了定时刷新（非关闭）
             if (interval > 0) {
@@ -1157,17 +1146,19 @@
         // 初始化时加载保存的刷新间隔
         function initRefreshInterval() {
             const savedInterval = localStorage.getItem('byteflow-refresh-interval');
-            const select = document.getElementById('refresh-interval');
-            
-            if (savedInterval !== null) {
-                select.value = savedInterval;
-            } else {
-                select.value = '0'; // 默认关闭
-            }
+            const interval = savedInterval !== null ? parseInt(savedInterval) : 0; // 默认关闭
             
             // 启动定时器
-            updateRefreshInterval();
+            updateRefreshInterval(interval);
         }
+        
+        // 刷新间隔按钮事件
+        document.querySelectorAll('[data-refresh]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const interval = parseInt(e.target.dataset.refresh);
+                updateRefreshInterval(interval);
+            });
+        });
         
         // 页面加载时初始化
         window.addEventListener('DOMContentLoaded', initRefreshInterval);
