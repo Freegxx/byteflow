@@ -94,44 +94,48 @@ class NetworkCollector:
     
     def parse_nettop_output(self, output: str) -> Dict[str, Tuple[int, int]]:
         """
-        解析 nettop 输出，提取每个进程的字节数
+        解析 nettop CSV 输出，提取每个进程的字节数
+        nettop -J 输出格式：,bytes_in,bytes_out,
+                         进程名.PID,字节数,字节数,
         返回: {app_name: (bytes_in, bytes_out)}
         """
         traffic_data = {}
         lines = output.strip().split('\n')
         
         for line in lines:
-            # nettop 输出格式：进程名 ... bytes_in bytes_out
-            # 使用正则表达式匹配
-            parts = line.split()
+            line = line.strip()
+            
+            # 跳过空行和表头
+            if not line or line.startswith(',bytes_in,') or line == ',bytes_in,bytes_out,':
+                continue
+            
+            # 按逗号分割 CSV
+            parts = line.split(',')
             if len(parts) < 3:
                 continue
             
-            # 进程名通常是第一列
-            app_name = parts[0]
-            
-            # 尝试提取字节数（通常在最后几列）
             try:
-                # nettop -J bytes_in,bytes_out 格式
-                # 寻找数字模式
-                numbers = []
-                for part in parts[1:]:
-                    # 移除逗号和单位，提取纯数字
-                    cleaned = re.sub(r'[^\d]', '', part)
-                    if cleaned:
-                        numbers.append(int(cleaned))
+                # 第一列是进程名（可能带.PID后缀）
+                process_name = parts[0].strip()
+                if not process_name:
+                    continue
                 
-                if len(numbers) >= 2:
-                    bytes_in = numbers[-2]
-                    bytes_out = numbers[-1]
+                # 去除 .PID 后缀（如 "mDNSResponder.193" -> "mDNSResponder"）
+                app_name = re.sub(r'\.\d+$', '', process_name)
+                
+                # 最后两个数字字段是 bytes_in 和 bytes_out
+                bytes_in = int(parts[1].strip())
+                bytes_out = int(parts[2].strip())
+                
+                # 聚合同名应用
+                if app_name in traffic_data:
+                    prev_in, prev_out = traffic_data[app_name]
+                    traffic_data[app_name] = (prev_in + bytes_in, prev_out + bytes_out)
+                else:
+                    traffic_data[app_name] = (bytes_in, bytes_out)
                     
-                    # 聚合同名应用
-                    if app_name in traffic_data:
-                        prev_in, prev_out = traffic_data[app_name]
-                        traffic_data[app_name] = (prev_in + bytes_in, prev_out + bytes_out)
-                    else:
-                        traffic_data[app_name] = (bytes_in, bytes_out)
-            except (ValueError, IndexError):
+            except (ValueError, IndexError) as e:
+                # 跳过无法解析的行
                 continue
         
         return traffic_data

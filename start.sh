@@ -60,6 +60,9 @@ echo ""
 # 创建 PID 文件目录
 mkdir -p .pids
 
+# 导出环境变量以确保日志实时输出
+export PYTHONUNBUFFERED=1
+
 # 启动采集器
 echo "1. 启动网络流量采集器..."
 python3 collector.py &
