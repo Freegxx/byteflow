@@ -245,6 +245,15 @@ class NetworkCollector:
                 if not raw_process_name:
                     continue
                 
+                # CRITICAL FIX: Skip connection lines (contain <->)
+                # These are NOT processes, they are connection details
+                if '<->' in raw_process_name:
+                    continue
+                
+                # Skip mDNS noise and system discovery
+                if raw_process_name.startswith('mDNSResponder') or '*:5353' in raw_process_name:
+                    continue
+                
                 # 当前累积计数器
                 cumulative_in = int(parts[1].strip())
                 cumulative_out = int(parts[2].strip())

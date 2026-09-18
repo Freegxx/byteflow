@@ -9,8 +9,8 @@ APP="$WORK/ByteFlow.app"
 OUT_DMG="${1:-$HOME/Desktop/ByteFlow-universal.dmg}"
 # 同时写入项目目录（若存在）
 PROJECT_DIR="/Users/guxx/Developer/Personal/byteflow"
-PY_VERSION="3.12.6"
-PBS_TAG="20240713"
+PY_VERSION="3.12.14"
+PBS_TAG="20260901"
 
 echo "======================================"
 echo " ByteFlow Universal DMG (arm64+x86_64)"
@@ -29,8 +29,8 @@ download_py() {
     arm64) pbs_arch="aarch64" ;;
     x86_64) pbs_arch="x86_64" ;;
   esac
-  name="cpython-${PY_VERSION}+${PBS_TAG}-${pbs_arch}-apple-darwin-install_only.tar.gz"
-  url="https://github.com/indygreg/python-build-standalone/releases/download/${PBS_TAG}/${name}"
+  name="cpython-${PY_VERSION}+${PBS_TAG}-${pbs_arch}-apple-darwin-install_only_stripped.tar.gz"
+  url="https://github.com/astral-sh/python-build-standalone/releases/download/${PBS_TAG}/${name}"
   echo "下载 Python ${PY_VERSION} (${arch})..."
   [[ -f "$WORK/cache/$name" ]] || curl -L --fail --progress-bar -o "$WORK/cache/$name" "$url"
   mkdir -p "$dest"
@@ -38,7 +38,15 @@ download_py() {
 }
 
 find_py() {
-  find "$1" -type f -name 'python3*' -path '*/bin/*' | head -1
+  # Prefer real interpreter, never *-config
+  local cand
+  for cand in "$1"/python/bin/python3 "$1"/python/bin/python3.12 "$1"/bin/python3; do
+    if [[ -x "$cand" && ! "$cand" =~ config$ ]]; then
+      echo "$cand"
+      return 0
+    fi
+  done
+  find "$1" -type f -path '*/bin/python3*' ! -name '*-config' | head -1
 }
 
 install_deps() {
@@ -47,6 +55,18 @@ install_deps() {
   "$py" -m ensurepip --upgrade >/dev/null 2>&1 || true
   "$py" -m pip install -U pip setuptools wheel >/dev/null
   "$py" -m pip install -r "$SRC/requirements-portable.txt"
+  "$py" -m pip uninstall -y pip setuptools wheel 2>/dev/null || true
+  # 瘦身：删缓存与测试
+  find "$(dirname "$py")/.." -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
+  find "$(dirname "$py")/.." -type d -name 'tests' -prune -exec rm -rf {} + 2>/dev/null || true
+  find "$(dirname "$py")/.." -type d -name 'test' -prune -exec rm -rf {} + 2>/dev/null || true
+  rm -rf "$(dirname "$py")/../share" "$(dirname "$py")/../lib/python*/ensurepip" 2>/dev/null || true
+  "$py" -m pip uninstall -y pip setuptools wheel 2>/dev/null || true
+  # 瘦身：删缓存与测试
+  find "$(dirname "$py")/.." -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
+  find "$(dirname "$py")/.." -type d -name 'tests' -prune -exec rm -rf {} + 2>/dev/null || true
+  find "$(dirname "$py")/.." -type d -name 'test' -prune -exec rm -rf {} + 2>/dev/null || true
+  rm -rf "$(dirname "$py")/../share" "$(dirname "$py")/../lib/python*/ensurepip" 2>/dev/null || true
   "$py" -c "import fastapi,uvicorn,aiosqlite,webview; print('  ok', __import__('sys').version)"
 }
 
@@ -97,6 +117,7 @@ cat > "$APP/Contents/Info.plist" << 'PLIST'
   <key>CFBundleShortVersionString</key><string>1.2.0</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>ByteFlow</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSAppTransportSecurity</key>
@@ -116,7 +137,11 @@ case "$ARCH" in
   x86_64) PY_ROOT="$ROOT/Frameworks/python-x86_64" ;;
   *) osascript -e "display alert \"不支持的架构: $ARCH\""; exit 1 ;;
 esac
-PY="$(find "$PY_ROOT" -type f -name 'python3*' -path '*/bin/*' | head -1)"
+PY=""
+for cand in "$PY_ROOT"/python/bin/python3 "$PY_ROOT"/python/bin/python3.12; do
+  [[ -x "$cand" ]] && PY="$cand" && break
+done
+[[ -n "$PY" ]] || PY="$(find "$PY_ROOT" -type f -path '*/bin/python3*' ! -name '*-config' | head -1)"
 [[ -x "${PY:-}" ]] || { osascript -e 'display alert "缺少对应架构的内置 Python"'; exit 1; }
 
 DATA="$HOME/Library/Application Support/ByteFlow"
@@ -162,6 +187,19 @@ fi
 exec "$PY" -u desktop.py
 LAUNCH
 chmod +x "$APP/Contents/MacOS/ByteFlow"
+# App icon
+mkdir -p "$APP/Contents/Resources"
+cp -f "$SRC/assets/AppIcon.png" "$APP/Contents/Resources/AppIcon.png" 2>/dev/null || true
+# Also make .icns if iconutil available
+if command -v sips >/dev/null && command -v iconutil >/dev/null && [[ -f "$SRC/assets/AppIcon.png" ]]; then
+  ICONSET="$WORK/AppIcon.iconset"
+  rm -rf "$ICONSET" && mkdir -p "$ICONSET"
+  for s in 16 32 128 256 512; do
+    sips -z $s $s "$SRC/assets/AppIcon.png" --out "$ICONSET/icon_${s}x${s}.png" >/dev/null
+    sips -z $((s*2)) $((s*2)) "$SRC/assets/AppIcon.png" --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
+  done
+  iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns" 2>/dev/null || true
+fi
 xattr -cr "$APP" 2>/dev/null || true
 
 echo "5/6 生成 DMG..."

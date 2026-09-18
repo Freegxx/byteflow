@@ -244,6 +244,9 @@ class NetworkCollector:
                 raw_process_name = parts[0].strip()
                 if not raw_process_name:
                     continue
+                # 连接行（tcp4/udp4 ...<->...）不是应用，跳过
+                if '<->' in raw_process_name:
+                    continue
                 
                 # 当前累积计数器
                 cumulative_in = int(parts[1].strip())
@@ -392,22 +395,29 @@ class NetworkCollector:
             # -L 1: 采样1次
             # -J: 指定列
             # -x: 无单位
-            result = subprocess.run(
+            # 进程汇总用 -P，避免连接行混进应用名
+            result_apps = subprocess.run(
+                ['nettop', '-P', '-n', '-L', '1', '-J', 'bytes_in,bytes_out', '-x'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            # 连接/IP 明细不用 -P
+            result_conns = subprocess.run(
                 ['nettop', '-n', '-L', '1', '-J', 'bytes_in,bytes_out', '-x'],
                 capture_output=True,
                 text=True,
                 timeout=5
             )
             
-            if result.returncode != 0:
-                print(f"nettop 执行失败: {result.stderr}")
+            if result_apps.returncode != 0:
+                print(f"nettop(-P) 执行失败: {result_apps.stderr}")
                 return {}, {}
             
-            # 解析应用级别流量（兼容原有格式）
-            app_traffic = self.parse_nettop_output(result.stdout)
-            
-            # 解析连接级别流量（IP 级别）
-            app_ip_traffic = self.parse_nettop_connections(result.stdout)
+            app_traffic = self.parse_nettop_output(result_apps.stdout)
+            app_ip_traffic = {}
+            if result_conns.returncode == 0:
+                app_ip_traffic = self.parse_nettop_connections(result_conns.stdout)
             
             return app_traffic, app_ip_traffic
         

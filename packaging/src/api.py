@@ -28,6 +28,10 @@ except ImportError:
 
 app = FastAPI(title="ByteFlow API", description="macOS 网络流量监控 API")
 
+_web_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+if os.path.isdir(os.path.join(_web_dir, "vendor")):
+    app.mount("/vendor", StaticFiles(directory=os.path.join(_web_dir, "vendor")), name="vendor")
+
 # 添加CORS支持
 app.add_middleware(
     CORSMiddleware,
@@ -48,7 +52,8 @@ def get_db_connection():
 @app.get("/")
 async def root():
     """返回前端页面"""
-    html_path = "web/index.html"
+    base = os.path.dirname(os.path.abspath(__file__))
+    html_path = os.path.join(base, "web", "index.html")
     if os.path.exists(html_path):
         with open(html_path, 'r', encoding='utf-8') as f:
             return HTMLResponse(content=f.read())

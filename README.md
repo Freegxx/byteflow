@@ -60,7 +60,7 @@
 **单个 DMG，支持所有 Mac！自动检测架构，无需用户选择。**
 
 **📥 下载并安装**:
-1. 从 [GitHub Releases](https://github.com/Freegxx/byteflow/releases) 下载 `ByteFlow-universal.dmg` (~300-350MB)
+1. 从 [GitHub Releases](https://github.com/Freegxx/byteflow/releases) 下载 `ByteFlow-universal.dmg` (~40-60MB，已优化)
    - ✅ 支持 Apple Silicon (M1/M2/M3/M4)
    - ✅ 支持 Intel Mac
    - ✅ 启动器自动检测架构
@@ -71,11 +71,12 @@
 
 **✨ 特点**:
 - ✅ **单个 DMG** - 无需选择架构，自动检测
-- ✅ **内嵌 Python 3.11.9** - arm64 + x86_64 双架构
+- ✅ **内嵌 Python 3.12.14** - arm64 + x86_64 双架构（install_only_stripped）
 - ✅ **所有依赖已预装**（pywebview, fastapi, uvicorn, aiosqlite, rumps, pyobjc）
 - ✅ **原生桌面窗口**（WKWebView）
 - ✅ **完全离线安装**
 - ✅ **关闭窗口自动停止服务**
+- ✅ **体积优化** - 使用精简 Python + 清理缓存（~40-60MB）
 
 **🔨 构建通用 DMG**（需要 macOS + 联网）:
 ```bash
@@ -83,12 +84,12 @@ git clone https://github.com/Freegxx/byteflow.git
 cd byteflow
 ./build_universal_dmg.command
 
-# 输出: ByteFlow-universal.dmg (~300-350MB)
+# 输出: ByteFlow-universal.dmg (~40-60MB，已优化)
 # 支持所有 Mac（arm64 + x86_64）
 ```
 
 **构建时间**: 首次 ~10-15 分钟（下载两个 Python + 安装依赖两次），后续 ~5-8 分钟  
-**DMG 大小**: ~300-350MB  
+**DMG 大小**: ~40-60MB（使用 `install_only_stripped` Python，清理缓存和测试文件）  
 **详细说明**: 见 `UNIVERSAL_DMG_GUIDE.md`
 
 ---
@@ -414,6 +415,19 @@ uvicorn.run(app, host="127.0.0.1", port=8787)
 - ⚠️ **性能**: 采集器使用极少的系统资源（<1% CPU）
 - ⚠️ **数据量**: 数据库大小取决于应用数量和运行时长，通常不会超过 100MB
 - ⚠️ **系统限制**: 本工具不需要系统扩展或 App Store 签名，但 `nettop` 可能需要管理员权限
+
+## 最近更新（v1.2.1）
+
+### 🐛 关键修复
+1. **数据采集准确性修复 (CRITICAL)**: 修复了错误地将 nettop 连接行（如 `udp4 *:5353<->*:*`）识别为应用的问题，导致"虚假应用"出现在概览中并产生错误的流量统计。现已正确跳过连接行，只解析进程汇总数据。
+2. **离线图表支持**: 修复了模态窗口中图表无法显示的问题 - 现使用本地 Chart.js 文件而非 CDN，确保打包应用在离线环境下正常工作。
+3. **应用图标**: 添加了 ByteFlow 应用图标（`.icns` + `.png`），在 Dock 和 Finder 中显示自定义图标。
+4. **DMG 体积大幅优化**: 通过使用 `install_only_stripped` Python 构建、清理 `__pycache__`、`tests` 目录和 pip 缓存，将 DMG 大小从 ~75MB+ 降至 ~40-60MB。
+
+### 🔧 技术改进
+- 采集器使用双 nettop 调用：`nettop -P` 用于进程汇总，单独调用用于 IP 连接详情
+- API 静态文件服务优化，支持打包环境下的相对路径
+- 构建脚本自动化清理和优化流程
 
 ## 许可证
 
