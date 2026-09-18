@@ -1,0 +1,5 @@
+# Menu bar app dependencies (optional)
+# Pin pyobjc-core to avoid yanked 12.0 version on Python 3.9
+pyobjc-core==10.3.1
+pyobjc-framework-Cocoa==10.3.1
+rumps==0.4.0

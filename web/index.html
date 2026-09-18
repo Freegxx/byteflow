@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ByteFlow - 网络流量监控</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: #f5f5f7;
+            color: #1d1d1f;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+
+        h1 {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .period-selector {
+            display: flex;
+            gap: 10px;
+        }
+
+        .refresh-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .refresh-interval-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .refresh-interval-control label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1d1d1f;
+        }
+
+        .refresh-interval-selector {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            background: #f5f5f7;
+            color: #1d1d1f;
+        }
+
+        .btn:hover {
+            background: #e8e8ed;
+        }
+
+        .btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-back {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-back:hover {
+            background: #5568d3;
+        }
+
+        .overview-section {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #1d1d1f;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #f5f5f7;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #1d1d1f;
+            font-size: 14px;
+            border-bottom: 2px solid #e8e8ed;
+        }
+
+        td {
+            padding: 14px 12px;
+            border-bottom: 1px solid #f5f5f7;
+            font-size: 14px;
+        }
+
+        tr:hover {
+            background: #fafafa;
+        }
+
+        .app-name {
+            font-weight: 500;
+            color: #667eea;
+            cursor: pointer;
+        }
+
+        .app-name:hover {
+            text-decoration: underline;
+        }
+
+        .traffic-value {
+            font-variant-numeric: tabular-nums;
+        }
+
+        .upload {
+            color: #34c759;
+        }
+
+        .download {
+            color: #007aff;
+        }
+
+        .chart-section {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            display: none;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .chart-title {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .range-selector {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 450px;
+            margin-top: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #86868b;
+        }
+
+        .error {
+            background: #ff3b30;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            flex: 1;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #86868b;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1d1d1f;
+        }
+
+        .refresh-btn {
+            background: #34c759;
+            color: white;
+        }
+
+        .refresh-btn:hover {
+            background: #2fb350;
+        }
+
+        .search-controls {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 15px;
+            border: 2px solid #e8e8ed;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-box input:focus {
+            border-color: #667eea;
+        }
+
+        .app-picker-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .app-picker-container label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1d1d1f;
+            white-space: nowrap;
+        }
+
+        .app-picker-container select {
+            padding: 10px 16px;
+            font-size: 14px;
+            border: 2px solid #e8e8ed;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            outline: none;
+            min-width: 200px;
+            transition: border-color 0.3s ease;
+        }
+
+        .app-picker-container select:focus {
+            border-color: #667eea;
+        }
+
+        .precision-note {
+            margin-top: 12px;
+            padding: 12px;
+            background: #f5f5f7;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #86868b;
+            line-height: 1.6;
+        }
+
+        .precision-note strong {
+            color: #1d1d1f;
+        }
+
+        .ip-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #f5f5f7;
+        }
+
+        .ip-section .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #1d1d1f;
+        }
+
+        #ip-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        #ip-table th {
+            background: #f5f5f7;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #1d1d1f;
+            font-size: 14px;
+            border-bottom: 2px solid #e8e8ed;
+        }
+
+        #ip-table td {
+            padding: 12px;
+            border-bottom: 1px solid #f5f5f7;
+            font-size: 14px;
+        }
+
+        #ip-table tbody tr:hover {
+            background: #fafafa;
+        }
+
+        /* Modal styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            overflow-y: auto;
+            padding: 40px 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            position: relative;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            padding: 30px;
+            border-bottom: 2px solid #f5f5f7;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1d1d1f;
+        }
+
+        .modal-close {
+            background: #f5f5f7;
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+            color: #86868b;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-close:hover {
+            background: #e8e8ed;
+            color: #1d1d1f;
+        }
+
+        .modal-body {
+            padding: 30px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .modal-summary-cards {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .modal-summary-card {
+            flex: 1;
+            background: linear-gradient(135deg, #f5f5f7 0%, #e8e8ed 100%);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .modal-summary-card.highlight {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .modal-summary-label {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            opacity: 0.8;
+        }
+
+        .modal-summary-value {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .modal-summary-sub {
+            font-size: 12px;
+            margin-top: 4px;
+            opacity: 0.7;
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .stats {
+                flex-direction: column;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            th, td {
+                padding: 8px;
+            }
+
+            .modal-summary-cards {
+                flex-direction: column;
+            }
+
+            .modal-header {
+                padding: 20px;
+            }
+
+            .modal-body {
+                padding: 20px;
+            }
+
+            .modal-title {
+                font-size: 22px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ByteFlow</h1>
+            <p class="subtitle">macOS 网络流量监控 - 实时追踪每个应用的网络使用情况</p>
+        </header>
+
+        <div id="error-message"></div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">监控应用数</div>
+                <div class="stat-value" id="total-apps">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">总下载流量</div>
+                <div class="stat-value download" id="total-download">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">总上传流量</div>
+                <div class="stat-value upload" id="total-upload">-</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="period-selector">
+                <button class="btn active" data-period="24h">最近24小时</button>
+                <button class="btn" data-period="7d">最近7天</button>
+                <button class="btn" data-period="30d">最近30天</button>
+            </div>
+            <div class="refresh-controls">
+                <div class="refresh-interval-control">
+                    <label>定时刷新</label>
+                    <div class="refresh-interval-selector">
+                        <button class="btn active" data-refresh="0">关闭</button>
+                        <button class="btn" data-refresh="1000">1秒</button>
+                        <button class="btn" data-refresh="3000">3秒</button>
+                        <button class="btn" data-refresh="5000">5秒</button>
+                        <button class="btn" data-refresh="30000">30秒</button>
+                        <button class="btn" data-refresh="60000">1分钟</button>
+                        <button class="btn" data-refresh="1800000">30分钟</button>
+                    </div>
+                </div>
+                <button class="btn refresh-btn" onclick="refreshData()">刷新数据</button>
+            </div>
+        </div>
+
+        <div class="overview-section" id="overview-section">
+            <h2 class="section-title">应用流量概览</h2>
+            
+            <!-- 搜索和快速选择器 -->
+            <div class="search-controls">
+                <div class="search-box">
+                    <input type="text" id="search-input" placeholder="🔍 搜索应用名称..." />
+                </div>
+                <div class="app-picker-container">
+                    <label for="app-picker">快速跳转：</label>
+                    <select id="app-picker">
+                        <option value="">-- 选择应用查看详情 --</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div id="loading" class="loading">正在加载数据...</div>
+            <table id="traffic-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>应用名称</th>
+                        <th>下载速率</th>
+                        <th>上传速率</th>
+                        <th>总下载</th>
+                        <th>总上传</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <!-- Modal for app details -->
+    <div class="modal-overlay" id="app-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modal-app-name">应用详情</h2>
+                <button class="modal-close" onclick="closeModal()" title="关闭 (ESC)">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- Summary cards -->
+                <div class="modal-summary-cards">
+                    <div class="modal-summary-card">
+                        <div class="modal-summary-label">24小时使用量</div>
+                        <div class="modal-summary-value" id="summary-24h">-</div>
+                        <div class="modal-summary-sub" id="summary-24h-mb">- MB</div>
+                    </div>
+                    <div class="modal-summary-card highlight">
+                        <div class="modal-summary-label">7天使用量</div>
+                        <div class="modal-summary-value" id="summary-7d">-</div>
+                        <div class="modal-summary-sub" id="summary-7d-mb">- MB</div>
+                    </div>
+                    <div class="modal-summary-card">
+                        <div class="modal-summary-label">30天使用量</div>
+                        <div class="modal-summary-value" id="summary-30d">-</div>
+                        <div class="modal-summary-sub" id="summary-30d-mb">- MB</div>
+                    </div>
+                </div>
+
+                <!-- Chart section -->
+                <div class="chart-section" id="chart-section">
+                    <div class="chart-header">
+                        <div class="range-selector">
+                            <button class="btn active" data-range="24h" onclick="changeRange('24h')">24小时</button>
+                            <button class="btn" data-range="7d" onclick="changeRange('7d')">7天</button>
+                            <button class="btn" data-range="30d" onclick="changeRange('30d')">30天</button>
+                        </div>
+                    </div>
+                    <div class="precision-note" id="precision-note">
+                        <strong>24小时</strong>：秒级精度数据，适合查看短期波动 | 
+                        <strong>7天</strong>：分钟级精度数据，适合分析每日模式 | 
+                        <strong>30天</strong>：小时级精度数据，适合查看长期趋势
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="traffic-chart"></canvas>
+                    </div>
+                    
+                    <!-- IP 地址列表 -->
+                    <div class="ip-section">
+                        <h3 class="section-title">远程 IP 地址</h3>
+                        <div id="ip-loading" class="loading" style="display: none;">正在加载 IP 数据...</div>
+                        <table id="ip-table">
+                            <thead>
+                                <tr>
+                                    <th>IP 地址</th>
+                                    <th>下载</th>
+                                    <th>上传</th>
+                                    <th>总计</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ip-table-body">
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: #86868b;">选择应用后显示其连接的远程 IP</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPeriod = '24h';
+        let currentApp = null;
+        let currentRange = '24h';
+        let chart = null;
+        let chartApp = null; // 当前图表显示的应用
+        let chartRange = null; // 当前图表显示的时间范围
+        let allAppsData = []; // 存储所有应用数据用于搜索过滤
+        let autoRefreshTimer = null; // 自动刷新定时器
+        let isRefreshing = false; // 防止重叠请求
+
+        // 格式化字节数
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 格式化速率
+        function formatRate(bytesPerSecond) {
+            return formatBytes(bytesPerSecond) + '/s';
+        }
+
+        // 格式化时间戳
+        function formatTimestamp(timestamp, range) {
+            const date = new Date(timestamp * 1000);
+            if (range === '24h') {
+                // 24小时：HH:mm 或 HH:mm:ss
+                return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            } else if (range === '7d') {
+                // 7天：MM-DD HH:mm
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hour = String(date.getHours()).padStart(2, '0');
+                const minute = String(date.getMinutes()).padStart(2, '0');
+                return `${month}-${day} ${hour}:${minute}`;
+            } else {
+                // 30天：MM-DD HH:00
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hour = String(date.getHours()).padStart(2, '0');
+                return `${month}-${day} ${hour}:00`;
+            }
+        }
+
+        // 显示错误消息
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.innerHTML = `<div class="error">${message}</div>`;
+            setTimeout(() => {
+                errorDiv.innerHTML = '';
+            }, 5000);
+        }
+
+        // 渲染应用表格（支持过滤）
+        function renderAppsTable(apps) {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+            
+            apps.forEach(app => {
+                const row = document.createElement('tr');
+                row.setAttribute('data-app-name', app.app_name.toLowerCase());
+                row.innerHTML = `
+                    <td><span class="app-name" onclick="showChart('${app.app_name.replace(/'/g, "\\'")}')">${app.app_name}</span></td>
+                    <td class="traffic-value download">${formatRate(app.rate_in)}</td>
+                    <td class="traffic-value upload">${formatRate(app.rate_out)}</td>
+                    <td class="traffic-value download">${formatBytes(app.total_in)}</td>
+                    <td class="traffic-value upload">${formatBytes(app.total_out)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 更新应用选择器
+        function updateAppPicker(apps) {
+            const picker = document.getElementById('app-picker');
+            picker.innerHTML = '<option value="">-- 选择应用查看详情 --</option>';
+            
+            apps.forEach(app => {
+                const option = document.createElement('option');
+                option.value = app.app_name;
+                option.textContent = app.app_name;
+                picker.appendChild(option);
+            });
+        }
+
+        // 搜索过滤
+        function filterApps() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            
+            if (!searchTerm) {
+                // 显示所有应用
+                renderAppsTable(allAppsData);
+                return;
+            }
+            
+            // 过滤应用（支持中文和英文模糊搜索）
+            const filtered = allAppsData.filter(app => 
+                app.app_name.toLowerCase().includes(searchTerm)
+            );
+            
+            renderAppsTable(filtered);
+        }
+
+        // 加载概览数据
+        async function loadOverview(period = '24h') {
+            if (isRefreshing) return; // 防止重叠请求
+            
+            isRefreshing = true;
+            currentPeriod = period;
+            
+            try {
+                const response = await fetch(`/api/overview?period=${period}`);
+                if (!response.ok) throw new Error('加载数据失败');
+                
+                const data = await response.json();
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('traffic-table').style.display = 'table';
+                
+                // 保存所有应用数据
+                allAppsData = data.apps;
+                
+                // 渲染表格和选择器
+                renderAppsTable(allAppsData);
+                updateAppPicker(allAppsData);
+                
+                // 计算总流量
+                let totalIn = 0;
+                let totalOut = 0;
+                data.apps.forEach(app => {
+                    totalIn += app.total_in;
+                    totalOut += app.total_out;
+                });
+                
+                // 更新统计卡片
+                document.getElementById('total-apps').textContent = data.apps.length;
+                document.getElementById('total-download').textContent = formatBytes(totalIn);
+                document.getElementById('total-upload').textContent = formatBytes(totalOut);
+                
+            } catch (error) {
+                console.error('加载概览数据失败:', error);
+                showError('加载数据失败，请确保采集器正在运行');
+            } finally {
+                isRefreshing = false;
+            }
+        }
+
+        // 打开模态框显示应用详情
+        async function showChart(appName) {
+            currentApp = appName;
+            document.getElementById('modal-app-name').textContent = appName;
+            document.getElementById('app-modal').classList.add('active');
+            document.body.style.overflow = 'hidden'; // 禁止背景滚动
+            
+            // 加载汇总数据
+            await loadSummaryData(appName);
+            
+            // 加载图表数据
+            await loadChartData(appName, currentRange);
+        }
+
+        // 关闭模态框
+        function closeModal() {
+            document.getElementById('app-modal').classList.remove('active');
+            document.body.style.overflow = ''; // 恢复滚动
+            if (chart) {
+                chart.destroy();
+                chart = null;
+            }
+            currentApp = null;
+            chartApp = null;
+            chartRange = null;
+        }
+
+        // 加载汇总数据（3个时间段的总流量）
+        async function loadSummaryData(appName) {
+            try {
+                // 并行加载 24h, 7d, 30d 的数据
+                const [data24h, data7d, data30d] = await Promise.all([
+                    fetch(`/api/overview?period=24h`).then(r => r.json()),
+                    fetch(`/api/overview?period=7d`).then(r => r.json()),
+                    fetch(`/api/overview?period=30d`).then(r => r.json())
+                ]);
+                
+                // 查找该应用的数据
+                const app24h = data24h.apps.find(a => a.app_name === appName);
+                const app7d = data7d.apps.find(a => a.app_name === appName);
+                const app30d = data30d.apps.find(a => a.app_name === appName);
+                
+                // 更新汇总卡片
+                if (app24h) {
+                    const total24h = app24h.total_in + app24h.total_out;
+                    document.getElementById('summary-24h').textContent = formatBytes(total24h);
+                    document.getElementById('summary-24h-mb').textContent = (total24h / 1024 / 1024).toFixed(2) + ' MB';
+                } else {
+                    document.getElementById('summary-24h').textContent = '0 B';
+                    document.getElementById('summary-24h-mb').textContent = '0 MB';
+                }
+                
+                if (app7d) {
+                    const total7d = app7d.total_in + app7d.total_out;
+                    document.getElementById('summary-7d').textContent = formatBytes(total7d);
+                    document.getElementById('summary-7d-mb').textContent = (total7d / 1024 / 1024).toFixed(2) + ' MB';
+                } else {
+                    document.getElementById('summary-7d').textContent = '0 B';
+                    document.getElementById('summary-7d-mb').textContent = '0 MB';
+                }
+                
+                if (app30d) {
+                    const total30d = app30d.total_in + app30d.total_out;
+                    document.getElementById('summary-30d').textContent = formatBytes(total30d);
+                    document.getElementById('summary-30d-mb').textContent = (total30d / 1024 / 1024).toFixed(2) + ' MB';
+                } else {
+                    document.getElementById('summary-30d').textContent = '0 B';
+                    document.getElementById('summary-30d-mb').textContent = '0 MB';
+                }
+                
+            } catch (error) {
+                console.error('加载汇总数据失败:', error);
+            }
+        }
+
+        // 加载图表数据
+        async function loadChartData(appName, range) {
+            try {
+                const response = await fetch(`/api/history/${encodeURIComponent(appName)}?range=${range}`);
+                if (!response.ok) throw new Error('加载历史数据失败');
+                
+                const data = await response.json();
+                
+                // API 返回的是每个时间段的传输字节数（增量），非累积值
+                // 直接转换为 MB 用于图表显示（每个点显示该时间段的流量）
+                const labels = data.data.map(point => formatTimestamp(point.timestamp, range));
+                const downloadData = data.data.map(point => point.bytes_in / 1024 / 1024); // MB
+                const uploadData = data.data.map(point => point.bytes_out / 1024 / 1024); // MB
+                
+                // 判断是否需要重建图表（切换应用或时间范围，或首次创建）
+                const needsRecreate = !chart || chartApp !== appName || chartRange !== range;
+                
+                if (needsRecreate) {
+                    // 销毁旧图表
+                    if (chart) {
+                        chart.destroy();
+                    }
+                    
+                    // 创建新图表
+                    const ctx = document.getElementById('traffic-chart').getContext('2d');
+                    chart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: '下载 (MB)',
+                                    data: downloadData,
+                                    borderColor: '#007aff',
+                                    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+                                    tension: 0.3,
+                                    fill: true
+                                },
+                                {
+                                    label: '上传 (MB)',
+                                    data: uploadData,
+                                    borderColor: '#34c759',
+                                    backgroundColor: 'rgba(52, 199, 89, 0.1)',
+                                    tension: 0.3,
+                                    fill: true
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            plugins: {
+                                legend: {
+                                    display: true,
+                                    position: 'top',
+                                    labels: {
+                                        font: {
+                                            size: 14
+                                        }
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + ' MB';
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    title: {
+                                        display: true,
+                                        text: '流量 (MB)'
+                                    }
+                                },
+                                x: {
+                                    title: {
+                                        display: true,
+                                        text: '时间'
+                                    },
+                                    ticks: {
+                                        maxTicksLimit: 12
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    
+                    // 记录当前图表状态
+                    chartApp = appName;
+                    chartRange = range;
+                } else {
+                    // 增量更新：相同应用和时间范围，仅更新数据
+                    chart.data.labels = labels;
+                    chart.data.datasets[0].data = downloadData;
+                    chart.data.datasets[1].data = uploadData;
+                    chart.update('none'); // 'none' 禁用动画，更快
+                }
+                
+            } catch (error) {
+                console.error('加载图表数据失败:', error);
+                showError('加载图表数据失败');
+            }
+            
+            // 加载 IP 数据
+            loadIPData(appName, range);
+        }
+
+        // 加载 IP 地址列表
+        async function loadIPData(appName, range) {
+            try {
+                document.getElementById('ip-loading').style.display = 'block';
+                
+                const response = await fetch(`/api/history/${encodeURIComponent(appName)}/ips?range=${range}`);
+                if (!response.ok) throw new Error('加载 IP 数据失败');
+                
+                const data = await response.json();
+                
+                document.getElementById('ip-loading').style.display = 'none';
+                
+                const tbody = document.getElementById('ip-table-body');
+                tbody.innerHTML = '';
+                
+                if (data.ips.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #86868b;">该时间段内无远程连接数据</td></tr>';
+                    return;
+                }
+                
+                // 渲染 IP 列表
+                data.ips.forEach(ip => {
+                    const row = document.createElement('tr');
+                    const totalMB = (ip.total_bytes / 1024 / 1024).toFixed(2);
+                    row.innerHTML = `
+                        <td style="font-family: monospace;">${ip.ip}</td>
+                        <td class="traffic-value download">${formatBytes(ip.bytes_in)}</td>
+                        <td class="traffic-value upload">${formatBytes(ip.bytes_out)}</td>
+                        <td class="traffic-value" style="font-weight: 600;">${formatBytes(ip.total_bytes)} <span style="color: #86868b; font-weight: 400;">(${totalMB} MB)</span></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+            } catch (error) {
+                console.error('加载 IP 数据失败:', error);
+                document.getElementById('ip-loading').style.display = 'none';
+                const tbody = document.getElementById('ip-table-body');
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #ff3b30;">加载 IP 数据失败</td></tr>';
+            }
+        }
+
+        // 改变时间范围
+        function changeRange(range) {
+            currentRange = range;
+            document.querySelectorAll('[data-range]').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            if (currentApp) {
+                loadChartData(currentApp, range);
+                // loadChartData 内部会调用 loadIPData
+            }
+        }
+
+        // 刷新数据
+        function refreshData() {
+            if (document.getElementById('overview-section').style.display !== 'none') {
+                loadOverview(currentPeriod);
+            } else if (currentApp) {
+                loadChartData(currentApp, currentRange);
+            }
+        }
+
+        // 时间段选择器事件
+        document.querySelectorAll('[data-period]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('[data-period]').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                loadOverview(e.target.dataset.period);
+            });
+        });
+
+        // 搜索框事件
+        document.getElementById('search-input').addEventListener('input', filterApps);
+        
+        // 应用选择器事件
+        document.getElementById('app-picker').addEventListener('change', (e) => {
+            const selectedApp = e.target.value;
+            if (selectedApp) {
+                showChart(selectedApp);
+                // 重置选择器
+                setTimeout(() => {
+                    e.target.value = '';
+                }, 100);
+            }
+        });
+
+        // ESC 键关闭模态框
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && document.getElementById('app-modal').classList.contains('active')) {
+                closeModal();
+            }
+        });
+
+        // 点击背景关闭模态框
+        document.getElementById('app-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'app-modal') {
+                closeModal();
+            }
+        });
+
+        // 初始加载
+        loadOverview('24h');
+        
+        // 自动刷新管理
+        function updateRefreshInterval(interval) {
+            // 清除现有定时器
+            if (autoRefreshTimer) {
+                clearInterval(autoRefreshTimer);
+                autoRefreshTimer = null;
+            }
+            
+            // 保存到 localStorage
+            localStorage.setItem('byteflow-refresh-interval', interval.toString());
+            
+            // 更新按钮状态
+            document.querySelectorAll('[data-refresh]').forEach(btn => {
+                btn.classList.remove('active');
+                if (parseInt(btn.dataset.refresh) === interval) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            // 如果选择了定时刷新（非关闭）
+            if (interval > 0) {
+                autoRefreshTimer = setInterval(() => {
+                    if (!isRefreshing) {
+                        performAutoRefresh();
+                    }
+                }, interval);
+            }
+        }
+        
+        // 执行自动刷新
+        function performAutoRefresh() {
+            const modal = document.getElementById('app-modal');
+            const isModalOpen = modal.classList.contains('active');
+            
+            if (isModalOpen && currentApp) {
+                // 模态框打开：刷新模态框内容（图表、使用量卡片、IP列表）
+                refreshModalContent();
+            } else {
+                // 模态框关闭：刷新概览列表
+                loadOverview(currentPeriod);
+            }
+        }
+        
+        // 刷新模态框内容
+        async function refreshModalContent() {
+            if (!currentApp || isRefreshing) return;
+            
+            isRefreshing = true;
+            try {
+                // 刷新三个使用量卡片
+                await loadSummaryData(currentApp);
+                // 刷新当前图表和 IP 列表
+                await loadChartData(currentApp, currentRange);
+            } finally {
+                isRefreshing = false;
+            }
+        }
+        
+        // 初始化时加载保存的刷新间隔
+        function initRefreshInterval() {
+            const savedInterval = localStorage.getItem('byteflow-refresh-interval');
+            const interval = savedInterval !== null ? parseInt(savedInterval) : 0; // 默认关闭
+            
+            // 启动定时器
+            updateRefreshInterval(interval);
+        }
+        
+        // 刷新间隔按钮事件
+        document.querySelectorAll('[data-refresh]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const interval = parseInt(e.target.dataset.refresh);
+                updateRefreshInterval(interval);
+            });
+        });
+        
+        // 页面加载时初始化
+        window.addEventListener('DOMContentLoaded', initRefreshInterval);
+    </script>
+</body>
+</html>

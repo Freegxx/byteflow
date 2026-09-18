@@ -1,15 +1,12 @@
 # ByteFlow
 
-**macOS 原生桌面应用** - 实时监控所有应用的网络使用情况，带历史数据图表
-
-🖥️ **原生桌面窗口** | 🚀 **开箱即用** | 🇨🇳 **中文界面**
+**macOS 网络流量监控系统** - 实时监控所有应用的网络使用情况，带历史数据图表
 
 [English version below](#english-version)
 
 ## 功能特性
 
 ### 核心功能
-- 🖥️ **原生桌面窗口**: 使用 pywebview + WKWebView，真正的 macOS 原生应用，不打开浏览器
 - 📊 **实时监控**: 可配置采样间隔（1秒/2秒/5秒），实时追踪所有应用的网络流量
 - 📈 **历史图表**: 查看任意应用的历史流量趋势，支持图表降采样优化
 - ⏱️ **多时间精度**: 
@@ -17,7 +14,7 @@
   - 最近 7 天：分钟级精度
   - 最近 30 天：小时级精度
 - 🔄 **定时刷新**: 可选的自动刷新间隔（1秒/3秒/5秒/30秒/1分钟/30分钟），智能增量更新
-- 🎨 **美观界面**: 现代化的中文界面
+- 🎨 **美观界面**: 现代化的中文 Web 界面
 - 🔍 **搜索过滤**: 快速搜索和筛选应用，支持中文
 
 ### 高级功能（v2.0+）
@@ -38,10 +35,9 @@
   - 可视化峰值丢弃事件
 - 📱 **菜单栏应用**: macOS 菜单栏显示实时速率和 Top 应用
 - 🚀 **一键安装**: 
-  - 双击启动，原生桌面窗口
+  - 双击安装器自动配置
   - 可选开机自动启动
   - LaunchAgent 集成
-  - 关闭窗口自动停止服务
 - 💾 **智能存储**: 
   - 本地 SQLite 数据库
   - 自动 30 天数据保留
@@ -55,102 +51,7 @@
 
 ## 快速开始
 
-### 🎯 方式一: 通用 DMG（强烈推荐，适合所有用户）
-
-**单个 DMG，支持所有 Mac！自动检测架构，无需用户选择。**
-
-**📥 下载并安装**:
-1. 从 [GitHub Releases](https://github.com/Freegxx/byteflow/releases) 下载 `ByteFlow-universal.dmg` (~300-350MB)
-   - ✅ 支持 Apple Silicon (M1/M2/M3/M4)
-   - ✅ 支持 Intel Mac
-   - ✅ 启动器自动检测架构
-2. 双击打开 DMG 文件
-3. 将 `ByteFlow.app` 拖到 `Applications` 文件夹
-4. 右键点击 ByteFlow.app → 打开（绕过 Gatekeeper）
-5. **原生桌面窗口自动打开**（不使用浏览器！）
-
-**✨ 特点**:
-- ✅ **单个 DMG** - 无需选择架构，自动检测
-- ✅ **内嵌 Python 3.11.9** - arm64 + x86_64 双架构
-- ✅ **所有依赖已预装**（pywebview, fastapi, uvicorn, aiosqlite, rumps, pyobjc）
-- ✅ **原生桌面窗口**（WKWebView）
-- ✅ **完全离线安装**
-- ✅ **关闭窗口自动停止服务**
-
-**🔨 构建通用 DMG**（需要 macOS + 联网）:
-```bash
-git clone https://github.com/Freegxx/byteflow.git
-cd byteflow
-./build_universal_dmg.command
-
-# 输出: ByteFlow-universal.dmg (~300-350MB)
-# 支持所有 Mac（arm64 + x86_64）
-```
-
-**构建时间**: 首次 ~10-15 分钟（下载两个 Python + 安装依赖两次），后续 ~5-8 分钟  
-**DMG 大小**: ~300-350MB  
-**详细说明**: 见 `UNIVERSAL_DMG_GUIDE.md`
-
----
-
-### 方式二: 架构特定 DMG（高级用户，更小下载）
-
-如果需要更小的下载文件：
-
-**下载并安装**:
-1. 下载对应架构的 DMG:
-   - Apple Silicon: `ByteFlow-v2.0-arm64.dmg` (~150-200MB)
-   - Intel Mac: `ByteFlow-v2.0-x86_64.dmg` (~150-200MB)
-2. 双击打开 DMG 文件
-3. 将 `ByteFlow.app` 拖到 `Applications` 文件夹
-4. 右键点击 ByteFlow.app → 打开（绕过 Gatekeeper）
-5. 原生桌面窗口自动打开
-
-**构建**:
-```bash
-./build_portable_dmg.sh
-# 输出（根据当前 Mac 架构）:
-# ByteFlow-v2.0-arm64.dmg (Apple Silicon)
-# ByteFlow-v2.0-x86_64.dmg (Intel)
-```
-
-详见 `PORTABLE_DMG_GUIDE.md`
-
----
-
-### 方式三: 标准 DMG（需要系统 Python，适合开发测试）
-
-**下载并安装**:
-1. 下载 `ByteFlow-v2.0.dmg`
-2. 双击打开 DMG 文件
-3. 将 `ByteFlow.app` 拖到 `Applications` 文件夹
-4. 双击运行 `ByteFlow.app`
-
-**首次运行**:
-- 应用会检测系统 Python 3.8+
-- 自动创建 venv 并安装依赖（需联网）
-- 可选择是否开机自动启动
-- 浏览器自动打开 Web 界面
-
-**Gatekeeper 提示**（未签名应用）:
-```
-右键点击 ByteFlow.app → 打开 → 确认打开
-或：系统偏好设置 → 安全性与隐私 → 通用 → "仍要打开"
-```
-
-**构建标准 DMG**（需要 macOS）:
-```bash
-git clone https://github.com/Freegxx/byteflow.git
-cd byteflow
-./build_dmg.sh
-# 输出: ByteFlow-v2.0.dmg (~2-5MB)
-```
-
-详细说明见 `DMG_BUILD_GUIDE.md`。
-
----
-
-### 方式三: Install.command 脚本（推荐开发者）
+### 方式一: 一键安装（推荐 macOS）
 
 ```bash
 # 1. 克隆仓库
@@ -166,11 +67,11 @@ chmod +x Install.command
 
 安装器会：
 - ✅ 将 ByteFlow 安装到 `~/Applications/ByteFlow`
-- ✅ 创建 Python 虚拟环境
-- ✅ 自动安装依赖
+- ✅ 自动安装 Python 依赖
 - ✅ 配置 LaunchAgent（可选开机启动）
+- ✅ 创建桌面快捷方式
 
-### 方式四: 手动运行
+### 方式二: 手动运行
 
 ```bash
 # 1. 克隆仓库
@@ -281,24 +182,13 @@ ByteFlow 会自动合并辅助进程到主应用，避免重复显示：
 
 ```
 ByteFlow
-├── ByteFlow.app/           # macOS 应用包（双击安装）
-│   └── Contents/
-│       ├── MacOS/
-│       │   └── ByteFlow    # 启动器（处理安装/启动）
-│       ├── Resources/      # 应用代码（下方文件）
-│       └── Info.plist      # 应用信息
-├── collector.py            # 网络流量采集器（Python）
-├── api.py                  # Web API 服务器（FastAPI）
-├── menubar.py              # 菜单栏应用（可选）
-├── config.py               # 配置管理
-├── utils.py                # 工具函数
+├── collector.py      # 网络流量采集器（Python）
+├── api.py           # Web API 服务器（FastAPI）
 ├── web/
-│   └── index.html          # 前端界面（Chart.js）
-├── byteflow.db             # SQLite 数据库（自动创建）
-├── build_dmg.sh            # DMG 构建脚本
-├── Install.command         # 备选安装器
-├── start.sh                # 启动脚本
-└── stop.sh                 # 停止脚本
+│   └── index.html   # 前端界面（Chart.js）
+├── byteflow.db      # SQLite 数据库（自动创建）
+├── start.sh         # 启动脚本
+└── stop.sh          # 停止脚本
 ```
 
 ### 数据采集原理

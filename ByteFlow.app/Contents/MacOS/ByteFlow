@@ -1,0 +1,222 @@
+#!/bin/bash
+# ByteFlow.app Launcher
+# macOS 应用启动器
+
+set -e
+
+# 获取应用路径
+APP_PATH="$(cd "$(dirname "$0")/../.." && pwd)"
+RESOURCES_PATH="$APP_PATH/Contents/Resources"
+VENV_PATH="$RESOURCES_PATH/venv"
+INSTALL_MARKER="$RESOURCES_PATH/.installed"
+
+# 首次运行检测
+FIRST_RUN=false
+if [ ! -f "$INSTALL_MARKER" ]; then
+    FIRST_RUN=true
+fi
+
+# 显示安装对话框
+if [ "$FIRST_RUN" = true ]; then
+    # 使用 osascript 显示欢迎对话框
+    osascript <<EOF
+display dialog "欢迎使用 ByteFlow 网络流量监控！
+
+首次运行需要进行初始化设置：
+• 创建 Python 虚拟环境
+• 安装必要依赖
+• 配置数据存储
+
+点击"继续"开始安装..." buttons {"退出", "继续"} default button "继续" with icon note with title "ByteFlow 安装"
+EOF
+    
+    if [ $? -ne 0 ]; then
+        # 用户点击了退出
+        exit 0
+    fi
+    
+    # 显示安装进度
+    osascript -e 'display notification "正在初始化 ByteFlow..." with title "ByteFlow"'
+fi
+
+# 切换到资源目录
+cd "$RESOURCES_PATH"
+
+# 检查 Python 3
+if ! command -v python3 &> /dev/null; then
+    osascript -e 'display alert "错误" message "未找到 Python 3\n\n请先安装 Python 3.8 或更高版本:\nhttps://www.python.org/downloads/" as critical'
+    exit 1
+fi
+
+PYTHON_VERSION=$(python3 --version 2>&1 | cut -d' ' -f2)
+PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
+PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+
+# 创建虚拟环境（首次运行）
+if [ "$FIRST_RUN" = true ] || [ ! -d "$VENV_PATH" ]; then
+    osascript -e 'display notification "创建 Python 虚拟环境..." with title "ByteFlow 安装"'
+    
+    python3 -m venv "$VENV_PATH" 2>&1 | tee /tmp/byteflow_install.log
+    
+    if [ $? -ne 0 ]; then
+        osascript -e 'display alert "安装失败" message "无法创建虚拟环境，请查看 /tmp/byteflow_install.log" as critical'
+        exit 1
+    fi
+fi
+
+# 激活虚拟环境
+source "$VENV_PATH/bin/activate"
+
+# 安装/更新核心依赖
+if [ "$FIRST_RUN" = true ]; then
+    osascript -e 'display notification "安装核心依赖..." with title "ByteFlow 安装"'
+    
+    pip install --upgrade pip -q 2>&1 | tee -a /tmp/byteflow_install.log
+    pip install -r "$RESOURCES_PATH/requirements.txt" -q 2>&1 | tee -a /tmp/byteflow_install.log
+    
+    if [ $? -ne 0 ]; then
+        osascript -e 'display alert "安装失败" message "核心依赖安装失败，请查看 /tmp/byteflow_install.log" as critical'
+        exit 1
+    fi
+    
+    # 尝试安装菜单栏应用依赖（可选）
+    osascript -e 'display notification "安装菜单栏应用（可选）..." with title "ByteFlow 安装"'
+    
+    # 为 Python 3.9 特别处理 pyobjc 版本
+    if [ "$PYTHON_MINOR" = "9" ]; then
+        pip install pyobjc-core==10.3.1 pyobjc-framework-Cocoa==10.3.1 -q 2>&1 | tee -a /tmp/byteflow_install.log
+    fi
+    
+    pip install -r "$RESOURCES_PATH/requirements-menubar.txt" -q 2>&1 | tee -a /tmp/byteflow_install.log
+    
+    if [ $? -eq 0 ]; then
+        echo "MENUBAR_AVAILABLE=true" > "$RESOURCES_PATH/.menubar_status"
+        osascript -e 'display notification "菜单栏应用安装成功" with title "ByteFlow"'
+    else
+        echo "MENUBAR_AVAILABLE=false" > "$RESOURCES_PATH/.menubar_status"
+        osascript -e 'display notification "菜单栏应用未安装（可选功能）" with title "ByteFlow"'
+    fi
+fi
+
+# 首次运行：询问是否开机启动
+if [ "$FIRST_RUN" = true ]; then
+    osascript <<EOF
+set loginItemResponse to button returned of (display dialog "是否设置 ByteFlow 开机自动启动？
+
+建议启用以便持续监控网络流量。" buttons {"否", "是"} default button "是" with title "ByteFlow 设置")
+
+if loginItemResponse is "是" then
+    return "yes"
+else
+    return "no"
+end if
+EOF
+    
+    LOGIN_ITEM_RESPONSE=$?
+    
+    if [ $LOGIN_ITEM_RESPONSE -eq 0 ]; then
+        # 用户选择了"是"
+        # 创建 LaunchAgent
+        LAUNCH_AGENT_DIR="$HOME/Library/LaunchAgents"
+        LAUNCH_AGENT_PLIST="$LAUNCH_AGENT_DIR/com.byteflow.app.plist"
+        
+        mkdir -p "$LAUNCH_AGENT_DIR"
+        
+        cat > "$LAUNCH_AGENT_PLIST" <<PLIST_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.byteflow.app</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$APP_PATH/Contents/MacOS/ByteFlow</string>
+        <string>--background</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>
+PLIST_EOF
+        
+        launchctl load "$LAUNCH_AGENT_PLIST" 2>/dev/null || true
+        osascript -e 'display notification "开机启动已设置" with title "ByteFlow"'
+    fi
+    
+    # 标记为已安装
+    touch "$INSTALL_MARKER"
+    echo "Installation completed at $(date)" > "$INSTALL_MARKER"
+    
+    osascript -e 'display notification "安装完成！正在启动..." with title "ByteFlow"'
+fi
+
+# 检查是否是后台启动（来自 LaunchAgent）
+BACKGROUND_MODE=false
+if [ "$1" = "--background" ]; then
+    BACKGROUND_MODE=true
+fi
+
+# 启动 ByteFlow 服务
+cd "$RESOURCES_PATH"
+
+# 设置环境变量
+export PYTHONUNBUFFERED=1
+
+# 创建日志目录
+mkdir -p logs
+
+# 非后台模式：启动桌面应用（前台）
+if [ "$BACKGROUND_MODE" = false ]; then
+    osascript -e 'display notification "正在启动 ByteFlow 桌面应用..." with title "ByteFlow"'
+    
+    # 检查 pywebview 是否可用
+    python3 -c "import webview" 2>/dev/null
+    if [ $? -eq 0 ]; then
+        # 使用桌面窗口（desktop.py 会自动启动和管理服务）
+        python3 desktop.py
+        exit 0
+    else
+        # 降级：pywebview 不可用，启动服务并使用浏览器
+        osascript -e 'display notification "pywebview 不可用，使用浏览器模式" with title "ByteFlow"'
+    fi
+fi
+
+# 后台模式或降级模式：手动启动服务
+# 检查是否已经在运行
+if [ -f .pids/collector.pid ]; then
+    COLLECTOR_PID=$(cat .pids/collector.pid)
+    if ps -p $COLLECTOR_PID > /dev/null 2>&1; then
+        # 已在运行，只打开浏览器（降级模式）
+        if [ "$BACKGROUND_MODE" = false ]; then
+            sleep 1
+            open "http://127.0.0.1:8787"
+        fi
+        exit 0
+    fi
+fi
+
+# 启动采集器
+mkdir -p .pids
+python3 collector.py > logs/collector.log 2>&1 &
+COLLECTOR_PID=$!
+echo $COLLECTOR_PID > .pids/collector.pid
+
+# 启动 API 服务器
+sleep 1
+python3 api.py > logs/api.log 2>&1 &
+API_PID=$!
+echo $API_PID > .pids/api.pid
+
+# 等待服务启动
+sleep 2
+
+# 降级模式：打开浏览器
+if [ "$BACKGROUND_MODE" = false ]; then
+    osascript -e 'display notification "ByteFlow 已启动\n访问地址: http://127.0.0.1:8787" with title "ByteFlow"'
+    open "http://127.0.0.1:8787"
+fi
+
+exit 0
