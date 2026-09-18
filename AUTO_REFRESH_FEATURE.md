@@ -9,8 +9,10 @@
 控件位于顶部工具栏，在"最近24小时/7天/30天"按钮组的右侧，"刷新数据"按钮的左侧。
 
 ```
-[最近24小时] [最近7天] [最近30天]    [定时刷新 ▼] [刷新数据]
+[最近24小时] [最近7天] [最近30天]    定时刷新 [关闭] [1秒] [3秒] [5秒] [30秒] [1分钟] [30分钟]    [刷新数据]
 ```
+
+**样式**: 与时间范围按钮一致的标签式按钮组，激活状态使用 `.active` 类（紫色背景）。
 
 ## 可选刷新间隔
 
@@ -84,12 +86,23 @@ async function loadOverview(period) {
 ```javascript
 let autoRefreshTimer = null;
 
-function updateRefreshInterval() {
+function updateRefreshInterval(interval) {
     // 清除旧定时器
     if (autoRefreshTimer) {
         clearInterval(autoRefreshTimer);
         autoRefreshTimer = null;
     }
+    
+    // 保存到 localStorage
+    localStorage.setItem('byteflow-refresh-interval', interval.toString());
+    
+    // 更新按钮激活状态
+    document.querySelectorAll('[data-refresh]').forEach(btn => {
+        btn.classList.remove('active');
+        if (parseInt(btn.dataset.refresh) === interval) {
+            btn.classList.add('active');
+        }
+    });
     
     // 创建新定时器（如果非关闭）
     if (interval > 0) {
@@ -100,11 +113,20 @@ function updateRefreshInterval() {
         }, interval);
     }
 }
+
+// 按钮点击事件
+document.querySelectorAll('[data-refresh]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        const interval = parseInt(e.target.dataset.refresh);
+        updateRefreshInterval(interval);
+    });
+});
 ```
 
 **特点**:
 - 更改选择立即重启定时器
 - 选择"关闭"清除定时器
+- 自动更新按钮激活状态（`.active` 类）
 - 仅在没有进行中的请求时执行刷新
 
 ### 4. 智能刷新路由
@@ -147,37 +169,43 @@ function performAutoRefresh() {
 
 ## 样式设计
 
-### 下拉选择器样式
+### 按钮式标签组
 
 ```css
-.refresh-interval-control select {
-    padding: 8px 12px;
-    border: 2px solid #e8e8ed;
+.refresh-interval-selector {
+    display: flex;
+    gap: 8px;
+}
+
+/* 使用现有的 .btn 和 .btn.active 样式 */
+.btn {
+    padding: 10px 20px;
+    border: none;
     border-radius: 8px;
+    cursor: pointer;
     font-size: 14px;
     font-weight: 500;
-    color: #1d1d1f;
-    background: white;
-    cursor: pointer;
     transition: all 0.3s ease;
+    background: #f5f5f7;
+    color: #1d1d1f;
 }
 
-.refresh-interval-control select:hover {
-    border-color: #667eea;
+.btn:hover {
+    background: #e8e8ed;
 }
 
-.refresh-interval-control select:focus {
-    outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+.btn.active {
+    background: #667eea;
+    color: white;
 }
 ```
 
 **设计原则**:
-- 与现有按钮风格一致
-- 悬停/聚焦时使用主题紫色 (`#667eea`)
-- 圆角 8px，与其他控件匹配
-- 平滑过渡动画（0.3s）
+- 完全复用时间范围按钮的样式（`.btn` 和 `.active`）
+- 与"最近24小时/7天/30天"按钮组视觉一致
+- 激活按钮使用主题紫色 (`#667eea`)
+- 圆角 8px，平滑过渡动画（0.3s）
+- 按钮间距 8px（比时间范围按钮的 10px 略小）
 
 ### 响应式布局
 
