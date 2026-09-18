@@ -6,17 +6,36 @@ ByteFlow API Server - Web API 服务器
 
 import sqlite3
 import time
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 import os
 
 DB_PATH = "byteflow.db"
 SAMPLE_INTERVAL = 1  # 采样间隔（秒），与 collector.py 保持一致
 
+try:
+    from config import get_config
+    from utils import (is_loopback, is_private, get_ipv4_24_network, 
+                      get_ipv6_48_network, downsample_data, aggregate_by_bucket)
+    CONFIG = get_config()
+except ImportError:
+    CONFIG = None
+    print("警告: 无法加载配置/工具模块")
+
 app = FastAPI(title="ByteFlow API", description="macOS 网络流量监控 API")
+
+# 添加CORS支持
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def get_db_connection():
@@ -310,6 +329,90 @@ async def get_stats():
         }
     }
 
+
+@app.get("/api/config")
+async def get_config_api():
+    """获取配置"""
+    if CONFIG:
+        return CONFIG.get_all()
+    return {}
+
+@app.post("/api/config")
+async def update_config_api(updates: dict = Body(...)):
+    """更新配置"""
+    if CONFIG:
+        CONFIG.update(updates)
+        return {"status": "ok", "config": CONFIG.get_all()}
+    return {"status": "error", "message": "配置模块未加载"}
+
+@app.get("/api/process_details/{app_name}")
+async def get_process_details(app_name: str, range: str = "24h"):
+    """获取应用的进程详情（用于drill-down）"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    now = int(time.time())
+    if range == "24h":
+        since = now - 24 * 3600
+    elif range == "7d":
+        since = now - 7 * 24 * 3600
+    else:
+        since = now - 30 * 24 * 3600
+    
+    cursor.execute("""
+        SELECT process_name, SUM(bytes_in), SUM(bytes_out)
+        FROM process_details
+        WHERE app_name = ? AND timestamp >= ?
+        GROUP BY process_name
+        ORDER BY (SUM(bytes_in) + SUM(bytes_out)) DESC
+    """, (app_name, since))
+    
+    processes = []
+    for row in cursor.fetchall():
+        processes.append({
+            "process_name": row[0],
+            "bytes_in": row[1],
+            "bytes_out": row[2],
+            "total": row[1] + row[2]
+        })
+    
+    conn.close()
+    return {"app_name": app_name, "processes": processes}
+
+@app.get("/api/spike_markers")
+async def get_spike_markers(range: str = "24h"):
+    """获取异常/峰值标记"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    now = int(time.time())
+    if range == "24h":
+        since = now - 24 * 3600
+    elif range == "7d":
+        since = now - 7 * 24 * 3600
+    else:
+        since = now - 30 * 24 * 3600
+    
+    cursor.execute("""
+        SELECT app_name, process_name, timestamp, reason, delta_in, delta_out
+        FROM spike_markers
+        WHERE timestamp >= ?
+        ORDER BY timestamp DESC
+    """, (since,))
+    
+    markers = []
+    for row in cursor.fetchall():
+        markers.append({
+            "app_name": row[0],
+            "process_name": row[1],
+            "timestamp": row[2],
+            "reason": row[3],
+            "delta_in": row[4],
+            "delta_out": row[5]
+        })
+    
+    conn.close()
+    return {"markers": markers}
 
 if __name__ == "__main__":
     import uvicorn

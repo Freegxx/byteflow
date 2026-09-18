@@ -11,12 +11,22 @@ import sys
 import platform
 import re
 from datetime import datetime, timedelta
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List, Optional
 import signal
 import os
+import json
 
 DB_PATH = "byteflow.db"
-SAMPLE_INTERVAL = 1  # 采样间隔（秒）
+SAMPLE_INTERVAL = 1  # 采样间隔（秒）- 可通过配置修改
+
+# 导入配置管理
+try:
+    from config import get_config
+    CONFIG = get_config()
+    SAMPLE_INTERVAL = CONFIG.get('sample_interval', 1)
+except ImportError:
+    CONFIG = None
+    print("警告: 无法加载配置模块，使用默认设置")
 
 
 class NetworkCollector:
@@ -25,6 +35,8 @@ class NetworkCollector:
         self.running = True
         self.previous_data = {}
         self.previous_connection_data = {}  # 存储连接级别的累积字节数
+        self.spike_markers = []  # 存储异常标记
+        self.process_details = {}  # 存储进程详情
         self.init_database()
         
         # 注册信号处理
@@ -147,6 +159,32 @@ class NetworkCollector:
                 bytes_in INTEGER NOT NULL,
                 bytes_out INTEGER NOT NULL,
                 UNIQUE(app_name, remote_ip, timestamp)
+            )
+        """)
+        
+        # 进程详情表（用于drill-down）
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS process_details (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                app_name TEXT NOT NULL,
+                process_name TEXT NOT NULL,
+                pid INTEGER,
+                timestamp INTEGER NOT NULL,
+                bytes_in INTEGER NOT NULL,
+                bytes_out INTEGER NOT NULL
+            )
+        """)
+        
+        # 异常/峰值标记表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS spike_markers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                app_name TEXT NOT NULL,
+                process_name TEXT,
+                timestamp INTEGER NOT NULL,
+                reason TEXT NOT NULL,
+                delta_in INTEGER,
+                delta_out INTEGER
             )
         """)
         
