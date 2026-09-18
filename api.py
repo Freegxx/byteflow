@@ -137,6 +137,9 @@ async def get_app_history(app_name: str, range: str = "24h"):
     """
     获取指定应用的历史流量数据
     range: 24h (秒级), 7d (分钟级), 30d (小时级)
+    
+    返回值：每个时间点的 bytes_in/out 是该时间段内的传输字节数（增量），非累积值
+    例如：10:00 → 5MB, 10:01 → 3MB 表示 10:00-10:01 传输了 5MB，10:01-10:02 传输了 3MB
     """
     conn = get_db_connection()
     cursor = conn.cursor()

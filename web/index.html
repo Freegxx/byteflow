@@ -897,9 +897,11 @@
                 
                 const data = await response.json();
                 
+                // API 返回的是每个时间段的传输字节数（增量），非累积值
+                // 直接转换为 MB 用于图表显示（每个点显示该时间段的流量）
                 const labels = data.data.map(point => formatTimestamp(point.timestamp, range));
-                const downloadData = data.data.map(point => point.bytes_in / 1024 / 1024); // 转换为 MB
-                const uploadData = data.data.map(point => point.bytes_out / 1024 / 1024);
+                const downloadData = data.data.map(point => point.bytes_in / 1024 / 1024); // MB
+                const uploadData = data.data.map(point => point.bytes_out / 1024 / 1024); // MB
                 
                 // 判断是否需要重建图表（切换应用或时间范围，或首次创建）
                 const needsRecreate = !chart || chartApp !== appName || chartRange !== range;
