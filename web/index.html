@@ -303,6 +303,45 @@
             color: #1d1d1f;
         }
 
+        .ip-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #f5f5f7;
+        }
+
+        .ip-section .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #1d1d1f;
+        }
+
+        #ip-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        #ip-table th {
+            background: #f5f5f7;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #1d1d1f;
+            font-size: 14px;
+            border-bottom: 2px solid #e8e8ed;
+        }
+
+        #ip-table td {
+            padding: 12px;
+            border-bottom: 1px solid #f5f5f7;
+            font-size: 14px;
+        }
+
+        #ip-table tbody tr:hover {
+            background: #fafafa;
+        }
+
         @media (max-width: 768px) {
             .controls {
                 flex-direction: column;
@@ -406,6 +445,27 @@
             </div>
             <div class="chart-container">
                 <canvas id="traffic-chart"></canvas>
+            </div>
+            
+            <!-- IP 地址列表 -->
+            <div class="ip-section">
+                <h3 class="section-title">远程 IP 地址</h3>
+                <div id="ip-loading" class="loading" style="display: none;">正在加载 IP 数据...</div>
+                <table id="ip-table">
+                    <thead>
+                        <tr>
+                            <th>IP 地址</th>
+                            <th>下载</th>
+                            <th>上传</th>
+                            <th>总计</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ip-table-body">
+                        <tr>
+                            <td colspan="4" style="text-align: center; color: #86868b;">选择应用后显示其连接的远程 IP</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -651,6 +711,50 @@
                 console.error('加载图表数据失败:', error);
                 showError('加载图表数据失败');
             }
+            
+            // 加载 IP 数据
+            loadIPData(appName, range);
+        }
+
+        // 加载 IP 地址列表
+        async function loadIPData(appName, range) {
+            try {
+                document.getElementById('ip-loading').style.display = 'block';
+                
+                const response = await fetch(`/api/history/${encodeURIComponent(appName)}/ips?range=${range}`);
+                if (!response.ok) throw new Error('加载 IP 数据失败');
+                
+                const data = await response.json();
+                
+                document.getElementById('ip-loading').style.display = 'none';
+                
+                const tbody = document.getElementById('ip-table-body');
+                tbody.innerHTML = '';
+                
+                if (data.ips.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #86868b;">该时间段内无远程连接数据</td></tr>';
+                    return;
+                }
+                
+                // 渲染 IP 列表
+                data.ips.forEach(ip => {
+                    const row = document.createElement('tr');
+                    const totalMB = (ip.total_bytes / 1024 / 1024).toFixed(2);
+                    row.innerHTML = `
+                        <td style="font-family: monospace;">${ip.ip}</td>
+                        <td class="traffic-value download">${formatBytes(ip.bytes_in)}</td>
+                        <td class="traffic-value upload">${formatBytes(ip.bytes_out)}</td>
+                        <td class="traffic-value" style="font-weight: 600;">${formatBytes(ip.total_bytes)} <span style="color: #86868b; font-weight: 400;">(${totalMB} MB)</span></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+            } catch (error) {
+                console.error('加载 IP 数据失败:', error);
+                document.getElementById('ip-loading').style.display = 'none';
+                const tbody = document.getElementById('ip-table-body');
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #ff3b30;">加载 IP 数据失败</td></tr>';
+            }
         }
 
         // 显示概览
@@ -673,6 +777,7 @@
             
             if (currentApp) {
                 loadChartData(currentApp, range);
+                // loadChartData 内部会调用 loadIPData
             }
         }
 

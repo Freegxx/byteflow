@@ -187,6 +187,68 @@ async def get_app_history(app_name: str, range: str = "24h"):
     }
 
 
+@app.get("/api/history/{app_name}/ips")
+async def get_app_ips(app_name: str, range: str = "24h"):
+    """
+    获取指定应用连接的远程 IP 列表及流量统计
+    range: 24h (秒级), 7d (分钟级), 30d (小时级)
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    now = int(time.time())
+    
+    # 根据时间范围选择数据源
+    if range == "24h":
+        table = "traffic_ip_raw"
+        since = now - 24 * 3600
+    elif range == "7d":
+        table = "traffic_ip_minute"
+        since = now - 7 * 24 * 3600
+    elif range == "30d":
+        table = "traffic_ip_hour"
+        since = now - 30 * 24 * 3600
+    else:
+        conn.close()
+        raise HTTPException(status_code=400, detail="无效的时间范围")
+    
+    # 查询该应用所有远程 IP 的总流量
+    query = f"""
+        SELECT 
+            remote_ip,
+            SUM(bytes_in) as total_in,
+            SUM(bytes_out) as total_out,
+            SUM(bytes_in + bytes_out) as total_bytes
+        FROM {table}
+        WHERE app_name = ? AND timestamp >= ?
+        GROUP BY remote_ip
+        ORDER BY total_bytes DESC
+    """
+    
+    cursor.execute(query, (app_name, since))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    if not rows:
+        return {"app_name": app_name, "range": range, "ips": []}
+    
+    # 构建响应
+    ip_list = []
+    for row in rows:
+        ip_list.append({
+            "ip": row[0],
+            "bytes_in": row[1],
+            "bytes_out": row[2],
+            "total_bytes": row[3]
+        })
+    
+    return {
+        "app_name": app_name,
+        "range": range,
+        "ips": ip_list
+    }
+
+
 @app.get("/api/stats")
 async def get_stats():
     """获取系统统计信息"""
