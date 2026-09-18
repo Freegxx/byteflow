@@ -1,0 +1,53 @@
+name: Release ByteFlow DMG
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag
+        required: true
+        default: v1.2.0
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rosetta (for x86_64 deps)
+        run: softwareupdate --install-rosetta --agree-to-license || true
+
+      - name: Build Universal DMG
+        run: |
+          chmod +x packaging/build_universal_dmg.command
+          cd packaging
+          ./build_universal_dmg.command "$HOME/ByteFlow-universal.dmg"
+          ls -lh "$HOME/ByteFlow-universal.dmg"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ByteFlow-universal-dmg
+          path: ~/ByteFlow-universal.dmg
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          FILE="$HOME/ByteFlow-universal.dmg"
+          NOTES="$(cat <<'N'
+          ByteFlow Universal DMG（Apple Silicon + Intel）
+          - 自包含 Python 与依赖，无需 pip
+          - 打开后为软件原生窗口（非系统浏览器）
+          - 安装：打开 DMG，拖到 Applications，再打开 ByteFlow
+          - 若提示未验证：右键 → 打开 → 仍要打开
+          N
+          )"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$FILE" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "$FILE" --repo "$GITHUB_REPOSITORY" --title "ByteFlow $TAG" --notes "$NOTES"
+          fi
