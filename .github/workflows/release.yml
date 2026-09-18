@@ -77,19 +77,27 @@ jobs:
             
             ## 🖥️ macOS 原生桌面应用
             
-            **通用版本** - 支持 Apple Silicon (M1/M2/M3) 和 Intel Mac
+            **通用版本** - 支持 Apple Silicon (M1/M2/M3/M4) 和 Intel Mac
             
-            ### ✨ 新特性
+            ### 🐛 v1.2.1 关键修复
+            
+            1. **数据采集准确性修复 (CRITICAL)**: 修复了错误地将 nettop 连接行（如 `udp4 *:5353<->*:*`）识别为应用的问题
+            2. **离线图表支持**: 修复了模态窗口中图表无法显示的问题 - 现使用本地 Chart.js 文件而非 CDN
+            3. **应用图标**: 添加了 ByteFlow 应用图标（`.icns` + `.png`）
+            4. **DMG 体积大幅优化**: 从 ~75MB+ 降至 **~40-60MB**（使用 `install_only_stripped` Python + 清理缓存）
+            
+            ### ✨ 核心特性
             
             - 🖥️ **原生桌面窗口** - 使用 pywebview + WKWebView，不打开浏览器
             - 📦 **单个 DMG** - 自动检测架构，无需用户选择
-            - 🚀 **完全便携** - 内嵌 Python 3.11.9 双架构运行时
+            - 🚀 **完全便携** - 内嵌 Python 3.12.14 双架构运行时（install_only_stripped）
             - 🇨🇳 **中文界面** - 完整本地化
             - ✅ **开箱即用** - 无需安装 Python 或依赖
+            - 💡 **体积优化** - 仅 ~40-60MB（之前 ~300-350MB）
             
             ### 📥 下载
             
-            - **ByteFlow-universal.dmg** (~300-350MB)
+            - **ByteFlow-universal.dmg** (~40-60MB)
               - 支持所有 Mac（Apple Silicon + Intel）
               - SHA256: `${{ steps.sha256.outputs.sha256 }}`
             
@@ -104,15 +112,15 @@ jobs:
             ### 🛠️ 系统要求
             
             - macOS 10.14+
-            - Apple Silicon (M1/M2/M3) 或 Intel Mac
-            - 磁盘空间: ~350MB
+            - Apple Silicon (M1/M2/M3/M4) 或 Intel Mac
+            - 磁盘空间: ~100MB
             - 终端"完全磁盘访问"权限
             
             ### 📖 文档
             
             - [完整文档](https://github.com/Freegxx/byteflow#readme)
+            - [通用 DMG 指南](https://github.com/Freegxx/byteflow/blob/main/UNIVERSAL_DMG_GUIDE.md)
             - [安装指南](https://github.com/Freegxx/byteflow/blob/main/MAC_INSTALL_TEST.md)
-            - [便携式 DMG 指南](https://github.com/Freegxx/byteflow/blob/main/PORTABLE_DMG_GUIDE.md)
           files: |
             ByteFlow-universal.dmg
             ByteFlow-universal.dmg.sha256
