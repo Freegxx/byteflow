@@ -172,12 +172,21 @@ class NetworkCollector:
     
     def parse_nettop_output(self, output: str) -> Dict[str, Tuple[int, int]]:
         """
-        解析 nettop CSV 输出，提取每个进程的字节数
+        解析 nettop CSV 输出，计算增量流量
+        
+        关键修复：
+        1. 按原始进程名（含PID）跟踪累积计数器
+        2. 计算每个进程的增量（delta）
+        3. 标准化应用名并聚合增量
+        4. 仅存储增量，避免累积计数器求和错误
+        
         nettop -J 输出格式：,bytes_in,bytes_out,
-                         进程名.PID,字节数,字节数,
-        返回: {app_name: (bytes_in, bytes_out)}
+                         进程名.PID,累积字节,累积字节,
+        返回: {app_name: (delta_bytes_in, delta_bytes_out)}
         """
-        traffic_data = {}
+        # 存储按标准化应用名的增量
+        app_deltas = {}
+        
         lines = output.strip().split('\n')
         
         for line in lines:
@@ -193,33 +202,51 @@ class NetworkCollector:
                 continue
             
             try:
-                # 第一列是进程名（可能带.PID后缀）
-                process_name = parts[0].strip()
-                if not process_name:
+                # 第一列是进程名（含.PID后缀）
+                raw_process_name = parts[0].strip()
+                if not raw_process_name:
                     continue
                 
-                # 去除 .PID 后缀（如 "mDNSResponder.193" -> "mDNSResponder"）
-                app_name = re.sub(r'\.\d+$', '', process_name)
+                # 当前累积计数器
+                cumulative_in = int(parts[1].strip())
+                cumulative_out = int(parts[2].strip())
                 
-                # 标准化应用名称（合并 Helper 进程）
-                app_name = self.normalize_app_name(app_name)
+                # 计算增量（使用原始进程名作为key，保持PID唯一性）
+                delta_in = 0
+                delta_out = 0
                 
-                # 最后两个数字字段是 bytes_in 和 bytes_out
-                bytes_in = int(parts[1].strip())
-                bytes_out = int(parts[2].strip())
+                if raw_process_name in self.previous_data:
+                    prev_in, prev_out = self.previous_data[raw_process_name]
+                    delta_in = max(0, cumulative_in - prev_in)
+                    delta_out = max(0, cumulative_out - prev_out)
+                    
+                    # 峰值保护：忽略单样本超过100MB/s的异常增量
+                    MAX_DELTA = 100 * 1024 * 1024 * SAMPLE_INTERVAL
+                    if delta_in > MAX_DELTA or delta_out > MAX_DELTA:
+                        print(f"  警告: {raw_process_name} 增量异常 (in:{delta_in/1024/1024:.1f}MB out:{delta_out/1024/1024:.1f}MB)，已忽略")
+                        delta_in = 0
+                        delta_out = 0
+                # 首次看到进程：delta为0（不计入完整累积值）
                 
-                # 聚合同名应用
-                if app_name in traffic_data:
-                    prev_in, prev_out = traffic_data[app_name]
-                    traffic_data[app_name] = (prev_in + bytes_in, prev_out + bytes_out)
-                else:
-                    traffic_data[app_name] = (bytes_in, bytes_out)
+                # 保存当前累积值供下次使用（使用原始进程名）
+                self.previous_data[raw_process_name] = (cumulative_in, cumulative_out)
+                
+                # 标准化应用名（去除.PID并合并Helper）
+                app_name_no_pid = re.sub(r'\.\d+$', '', raw_process_name)
+                app_name = self.normalize_app_name(app_name_no_pid)
+                
+                # 聚合增量到标准化应用名
+                if delta_in > 0 or delta_out > 0:
+                    if app_name in app_deltas:
+                        prev_delta_in, prev_delta_out = app_deltas[app_name]
+                        app_deltas[app_name] = (prev_delta_in + delta_in, prev_delta_out + delta_out)
+                    else:
+                        app_deltas[app_name] = (delta_in, delta_out)
                     
             except (ValueError, IndexError) as e:
-                # 跳过无法解析的行
                 continue
         
-        return traffic_data
+        return app_deltas
     
     def parse_nettop_connections(self, output: str) -> Dict[str, Dict[str, Tuple[int, int]]]:
         """
@@ -284,6 +311,13 @@ class NetworkCollector:
                             prev_in, prev_out = self.previous_connection_data[conn_key]
                             delta_in = max(0, bytes_in - prev_in)
                             delta_out = max(0, bytes_out - prev_out)
+                            
+                            # 峰值保护：忽略连接级别的异常增量
+                            MAX_DELTA = 100 * 1024 * 1024 * SAMPLE_INTERVAL
+                            if delta_in > MAX_DELTA or delta_out > MAX_DELTA:
+                                delta_in = 0
+                                delta_out = 0
+                        # 首次看到连接：delta为0（不计入完整累积值）
                         
                         # 保存当前累积值
                         self.previous_connection_data[conn_key] = (bytes_in, bytes_out)
@@ -350,31 +384,31 @@ class NetworkCollector:
             return {}, {}
     
     def save_traffic_data(self, traffic_data: Dict[str, Tuple[int, int]], timestamp: int):
-        """保存流量数据到数据库"""
+        """
+        保存流量数据到数据库
+        
+        关键修复：traffic_data 现在包含的是增量（delta），而非累积值
+        - bytes_in/out: 本采样间隔的传输字节数
+        - rate_in/out: 速率 = bytes / interval
+        
+        这样 SUM(bytes_in) 才能正确得到时间段总流量
+        """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        for app_name, (bytes_in, bytes_out) in traffic_data.items():
-            # 计算速率（相对于上一次采样）
-            rate_in = 0.0
-            rate_out = 0.0
+        for app_name, (delta_in, delta_out) in traffic_data.items():
+            # 速率 = 增量 / 时间间隔
+            rate_in = delta_in / SAMPLE_INTERVAL
+            rate_out = delta_out / SAMPLE_INTERVAL
             
-            if app_name in self.previous_data:
-                prev_in, prev_out = self.previous_data[app_name]
-                rate_in = max(0, bytes_in - prev_in) / SAMPLE_INTERVAL
-                rate_out = max(0, bytes_out - prev_out) / SAMPLE_INTERVAL
-            
-            # 保存到原始数据表
+            # 保存增量和速率到原始数据表
             cursor.execute("""
                 INSERT INTO traffic_raw (app_name, bundle_id, timestamp, bytes_in, bytes_out, rate_in, rate_out)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (app_name, None, timestamp, bytes_in, bytes_out, rate_in, rate_out))
+            """, (app_name, None, timestamp, delta_in, delta_out, rate_in, rate_out))
         
         conn.commit()
         conn.close()
-        
-        # 更新上次数据
-        self.previous_data = traffic_data
     
     def save_ip_traffic_data(self, app_ip_traffic: Dict[str, Dict[str, Tuple[int, int]]], timestamp: int):
         """保存 IP 级别流量数据到数据库"""

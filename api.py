@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse
 import os
 
 DB_PATH = "byteflow.db"
+SAMPLE_INTERVAL = 1  # 采样间隔（秒），与 collector.py 保持一致
 
 app = FastAPI(title="ByteFlow API", description="macOS 网络流量监控 API")
 
@@ -61,18 +62,36 @@ async def get_overview(period: str = "24h"):
         raise HTTPException(status_code=400, detail="无效的时间范围")
     
     # 查询每个应用的总流量
-    query = f"""
-        SELECT 
-            app_name,
-            SUM(bytes_in) as total_in,
-            SUM(bytes_out) as total_out
-        FROM {table}
-        WHERE timestamp >= ?
-        GROUP BY app_name
-        ORDER BY (total_in + total_out) DESC
-    """
+    # 注意：bytes_in/out 现在存储的是每个采样间隔的增量字节数
+    # 对于 traffic_raw (24h)：使用 SUM(rate_*) 更准确（兼容旧数据）
+    # 对于 minute/hour：SUM(bytes_*) 正确（已经是增量聚合）
+    if table == "traffic_raw":
+        # 24h: 使用速率求和以确保准确性
+        query = f"""
+            SELECT 
+                app_name,
+                SUM(rate_in * ?) as total_in,
+                SUM(rate_out * ?) as total_out
+            FROM {table}
+            WHERE timestamp >= ?
+            GROUP BY app_name
+            ORDER BY (total_in + total_out) DESC
+        """
+        cursor.execute(query, (SAMPLE_INTERVAL, SAMPLE_INTERVAL, since))
+    else:
+        # 7d/30d: 直接求和增量字节
+        query = f"""
+            SELECT 
+                app_name,
+                SUM(bytes_in) as total_in,
+                SUM(bytes_out) as total_out
+            FROM {table}
+            WHERE timestamp >= ?
+            GROUP BY app_name
+            ORDER BY (total_in + total_out) DESC
+        """
+        cursor.execute(query, (since,))
     
-    cursor.execute(query, (since,))
     rows = cursor.fetchall()
     
     # 计算当前速率（从最近的原始数据）
