@@ -55,45 +55,70 @@
 
 ## 快速开始
 
-### 方式一: 便携式 DMG（推荐生产分发，开箱即用）
+### 🎯 方式一: 通用 DMG（强烈推荐，适合所有用户）
 
-**🎯 特点：完全自包含，无需系统 Python 或联网**
+**单个 DMG，支持所有 Mac！自动检测架构，无需用户选择。**
 
-**下载并安装**:
-1. 下载对应架构的 DMG:
-   - Apple Silicon (M1/M2/M3): `ByteFlow-v2.0-arm64.dmg`
-   - Intel Mac: `ByteFlow-v2.0-x86_64.dmg`
+**📥 下载并安装**:
+1. 从 [GitHub Releases](https://github.com/Freegxx/byteflow/releases) 下载 `ByteFlow-universal.dmg` (~300-350MB)
+   - ✅ 支持 Apple Silicon (M1/M2/M3/M4)
+   - ✅ 支持 Intel Mac
+   - ✅ 启动器自动检测架构
 2. 双击打开 DMG 文件
 3. 将 `ByteFlow.app` 拖到 `Applications` 文件夹
 4. 右键点击 ByteFlow.app → 打开（绕过 Gatekeeper）
 5. **原生桌面窗口自动打开**（不使用浏览器！）
 
-**内含组件**:
-- ✅ Python 3.11.9 运行时（内嵌）
-- ✅ 所有依赖已预装（含 pywebview）
-- ✅ 原生桌面窗口（WKWebView）
-- ✅ 开箱即用，无需联网
-- ✅ 无需目标机器安装 Python
-- ✅ 关闭窗口自动停止服务
+**✨ 特点**:
+- ✅ **单个 DMG** - 无需选择架构，自动检测
+- ✅ **内嵌 Python 3.11.9** - arm64 + x86_64 双架构
+- ✅ **所有依赖已预装**（pywebview, fastapi, uvicorn, aiosqlite, rumps, pyobjc）
+- ✅ **原生桌面窗口**（WKWebView）
+- ✅ **完全离线安装**
+- ✅ **关闭窗口自动停止服务**
 
-**构建便携式 DMG**（需要 macOS + 联网，一次性）:
+**🔨 构建通用 DMG**（需要 macOS + 联网）:
 ```bash
 git clone https://github.com/Freegxx/byteflow.git
 cd byteflow
-./build_portable_dmg.sh
+./build_universal_dmg.command
 
-# 输出（根据当前 Mac 架构）:
-# ByteFlow-v2.0-arm64.dmg (Apple Silicon Mac 上)
-# ByteFlow-v2.0-x86_64.dmg (Intel Mac 上)
+# 输出: ByteFlow-universal.dmg (~300-350MB)
+# 支持所有 Mac（arm64 + x86_64）
 ```
 
-**构建时间**: 首次 ~5-10 分钟（下载 Python + 依赖），后续 ~2-3 分钟  
-**DMG 大小**: ~150-200MB  
-**详细说明**: 见 `PORTABLE_DMG_GUIDE.md`
+**构建时间**: 首次 ~10-15 分钟（下载两个 Python + 安装依赖两次），后续 ~5-8 分钟  
+**DMG 大小**: ~300-350MB  
+**详细说明**: 见 `UNIVERSAL_DMG_GUIDE.md`
 
 ---
 
-### 方式二: 标准 DMG（需要系统 Python，适合开发测试）
+### 方式二: 架构特定 DMG（高级用户，更小下载）
+
+如果需要更小的下载文件：
+
+**下载并安装**:
+1. 下载对应架构的 DMG:
+   - Apple Silicon: `ByteFlow-v2.0-arm64.dmg` (~150-200MB)
+   - Intel Mac: `ByteFlow-v2.0-x86_64.dmg` (~150-200MB)
+2. 双击打开 DMG 文件
+3. 将 `ByteFlow.app` 拖到 `Applications` 文件夹
+4. 右键点击 ByteFlow.app → 打开（绕过 Gatekeeper）
+5. 原生桌面窗口自动打开
+
+**构建**:
+```bash
+./build_portable_dmg.sh
+# 输出（根据当前 Mac 架构）:
+# ByteFlow-v2.0-arm64.dmg (Apple Silicon)
+# ByteFlow-v2.0-x86_64.dmg (Intel)
+```
+
+详见 `PORTABLE_DMG_GUIDE.md`
+
+---
+
+### 方式三: 标准 DMG（需要系统 Python，适合开发测试）
 
 **下载并安装**:
 1. 下载 `ByteFlow-v2.0.dmg`

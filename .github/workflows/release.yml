@@ -1,0 +1,120 @@
+name: Build and Release Universal DMG
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v2.0.0)'
+        required: true
+        default: 'v2.0.0'
+
+jobs:
+  build-universal-dmg:
+    name: Build Universal ByteFlow DMG
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies (for build script)
+        run: |
+          python -m pip install --upgrade pip
+      
+      - name: Build Universal DMG
+        run: |
+          chmod +x build_universal_dmg.command
+          ./build_universal_dmg.command
+      
+      - name: Verify DMG created
+        run: |
+          if [ ! -f "ByteFlow-universal.dmg" ]; then
+            echo "Error: ByteFlow-universal.dmg not found"
+            exit 1
+          fi
+          
+          echo "DMG created successfully:"
+          ls -lh ByteFlow-universal.dmg
+          
+          # Show DMG size
+          DMG_SIZE=$(du -h ByteFlow-universal.dmg | cut -f1)
+          echo "DMG size: $DMG_SIZE"
+      
+      - name: Upload DMG as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ByteFlow-universal-dmg
+          path: ByteFlow-universal.dmg
+          retention-days: 90
+      
+      - name: Calculate SHA256
+        id: sha256
+        run: |
+          SHA256=$(shasum -a 256 ByteFlow-universal.dmg | cut -d' ' -f1)
+          echo "SHA256: $SHA256"
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "$SHA256  ByteFlow-universal.dmg" > ByteFlow-universal.dmg.sha256
+      
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+          name: ByteFlow ${{ github.event.inputs.version || github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            # ByteFlow ${{ github.event.inputs.version || github.ref_name }}
+            
+            ## 🖥️ macOS 原生桌面应用
+            
+            **通用版本** - 支持 Apple Silicon (M1/M2/M3) 和 Intel Mac
+            
+            ### ✨ 新特性
+            
+            - 🖥️ **原生桌面窗口** - 使用 pywebview + WKWebView，不打开浏览器
+            - 📦 **单个 DMG** - 自动检测架构，无需用户选择
+            - 🚀 **完全便携** - 内嵌 Python 3.11.9 双架构运行时
+            - 🇨🇳 **中文界面** - 完整本地化
+            - ✅ **开箱即用** - 无需安装 Python 或依赖
+            
+            ### 📥 下载
+            
+            - **ByteFlow-universal.dmg** (~300-350MB)
+              - 支持所有 Mac（Apple Silicon + Intel）
+              - SHA256: `${{ steps.sha256.outputs.sha256 }}`
+            
+            ### 📝 安装步骤
+            
+            1. 下载 `ByteFlow-universal.dmg`
+            2. 双击打开 DMG
+            3. 将 `ByteFlow.app` 拖到 `Applications` 文件夹
+            4. 右键点击 `ByteFlow.app` → 打开（绕过 Gatekeeper）
+            5. 原生桌面窗口自动打开
+            
+            ### 🛠️ 系统要求
+            
+            - macOS 10.14+
+            - Apple Silicon (M1/M2/M3) 或 Intel Mac
+            - 磁盘空间: ~350MB
+            - 终端"完全磁盘访问"权限
+            
+            ### 📖 文档
+            
+            - [完整文档](https://github.com/Freegxx/byteflow#readme)
+            - [安装指南](https://github.com/Freegxx/byteflow/blob/main/MAC_INSTALL_TEST.md)
+            - [便携式 DMG 指南](https://github.com/Freegxx/byteflow/blob/main/PORTABLE_DMG_GUIDE.md)
+          files: |
+            ByteFlow-universal.dmg
+            ByteFlow-universal.dmg.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
