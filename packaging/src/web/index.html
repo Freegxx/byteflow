@@ -182,7 +182,8 @@
             padding: 25px;
             border-radius: 12px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-            display: none;
+            /* Visible inside modal; modal-overlay controls show/hide */
+            display: block;
         }
 
         .chart-header {
@@ -825,8 +826,11 @@
             
             // 加载汇总数据
             await loadSummaryData(appName);
-            
-            // 加载图表数据
+
+            const chartSection = document.getElementById('chart-section');
+            if (chartSection) chartSection.style.display = 'block';
+
+            // 加载图表数据（须在 chart-section 可见后创建 Chart，否则尺寸为 0）
             await loadChartData(appName, currentRange);
         }
 
@@ -988,6 +992,7 @@
                     // 记录当前图表状态
                     chartApp = appName;
                     chartRange = range;
+                    requestAnimationFrame(() => { try { chart.resize(); } catch (e) {} });
                 } else {
                     // 增量更新：相同应用和时间范围，仅更新数据
                     chart.data.labels = labels;
